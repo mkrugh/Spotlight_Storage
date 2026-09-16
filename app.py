@@ -16,7 +16,10 @@ from werkzeug.utils import secure_filename
 
 # Creating a Flask application instance
 app = Flask(__name__)
-app.config['JSON_SORT_KEYS'] = False
+if hasattr(app, 'json') and hasattr(app.json, 'sort_keys'):
+    app.json.sort_keys = False
+else:
+    app.config['JSON_SORT_KEYS'] = False
 
 # Default Values
 app.brightness = 1
