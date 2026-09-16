@@ -15,11 +15,13 @@ class TestRequirementsAndBuildSanity:
         import requests
         import werkzeug
         import jinja2
+        import waitress
         import app
         import db
 
         assert flask.__version__ is not None
         assert requests.__version__ is not None
+        assert waitress.__version__ is not None
 
     def test_dockerfile_exists_and_configured(self):
         dockerfile_path = os.path.join(PROJECT_ROOT, 'Dockerfile')
@@ -30,6 +32,18 @@ class TestRequirementsAndBuildSanity:
         assert "EXPOSE 5000" in content
         assert "ENTRYPOINT" in content
         assert "requirements.txt" in content
+        assert "USER appuser" in content, "Dockerfile should enforce non-root user execution"
+        assert "HEALTHCHECK" in content, "Dockerfile should configure container healthcheck"
+
+    def test_requirements_txt_configured(self):
+        req_path = os.path.join(PROJECT_ROOT, 'requirements.txt')
+        assert os.path.exists(req_path), "requirements.txt must exist"
+        with open(req_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert "Flask" in content
+        assert "waitress" in content
+        assert "Werkzeug" in content
 
     def test_docker_compose_exists_and_valid(self):
         compose_path = os.path.join(PROJECT_ROOT, 'docker-compose.yaml')

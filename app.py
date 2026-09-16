@@ -31,6 +31,7 @@ app.config['UPLOAD_FOLDER'] = './images'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
 app.previous_positions = {}  # last located LED positions, per ESP IP
 app.off_timers = {}  # pending turn-off timers, per ESP IP
+app.state_lock = threading.Lock()  # thread-safe lock for concurrent WSGI threads
 app.request_amount = 0
 
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -367,12 +368,13 @@ def get_total_leds(ip):
 
 
 def cancel_off_timer(ip=None):
-    # Cancel the pending turn-off timer for one ESP, or for all ESPs
-    ips = [ip] if ip else list(app.off_timers.keys())
-    for key in ips:
-        timer = app.off_timers.pop(key, None)
-        if timer:
-            timer.cancel()
+    # Cancel the pending turn-off timer for one ESP, or for all ESPs (thread-safe)
+    with app.state_lock:
+        ips = [ip] if ip else list(app.off_timers.keys())
+        for key in ips:
+            timer = app.off_timers.pop(key, None)
+            if timer:
+                timer.cancel()
 
 
 def set_leds(led_indices, color, off_color, ip, testing=False):
@@ -413,8 +415,11 @@ def set_leds(led_indices, color, off_color, ip, testing=False):
         led_indices_new = list(map(int, led_indices))
 
     # Check if the new positions are different from the previous ones
+    with app.state_lock:
+        is_different = (app.previous_positions.get(ip) != led_indices_new)
+
     toggled_off = False
-    if app.previous_positions.get(ip) != led_indices_new:
+    if is_different:
         # Initialize payload for turning on LEDs with the desired color
         on_payload = {
             "on": True,
@@ -429,11 +434,13 @@ def set_leds(led_indices, color, off_color, ip, testing=False):
         send_request(ip, on_payload)
 
         # Update the previous positions to the current ones
-        app.previous_positions[ip] = led_indices_new
+        with app.state_lock:
+            app.previous_positions[ip] = led_indices_new
     else:
         # If the positions are the same, turn off all LEDs
         send_request(ip, build_off_payload())
-        app.previous_positions.pop(ip, None)
+        with app.state_lock:
+            app.previous_positions.pop(ip, None)
         toggled_off = True
 
     # Schedule turning the LEDs off after the timeout, without blocking the request
@@ -442,12 +449,14 @@ def set_leds(led_indices, color, off_color, ip, testing=False):
     elif app.timeout > 0 and not toggled_off:
         def turn_off():
             send_request(ip, build_off_payload())
-            app.previous_positions.pop(ip, None)
-            app.off_timers.pop(ip, None)
+            with app.state_lock:
+                app.previous_positions.pop(ip, None)
+                app.off_timers.pop(ip, None)
 
         timer = threading.Timer(app.timeout, turn_off)
         timer.daemon = True
-        app.off_timers[ip] = timer
+        with app.state_lock:
+            app.off_timers[ip] = timer
         timer.start()
 
     app.delSegments = True
@@ -766,4 +775,15 @@ def get_languages():
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", debug=False)
+    # Use Waitress WSGI server in production; fallback to dev server if debug requested
+    if os.getenv('FLASK_ENV') == 'development' or os.getenv('DEBUG') == 'true':
+        app.run(host="0.0.0.0", port=5000, debug=True)
+    else:
+        try:
+            from waitress import serve
+            threads = int(os.getenv('WAITRESS_THREADS', '6'))
+            print(f"Starting Spotlight Storage with Waitress WSGI server on port 5000 (threads={threads})...")
+            serve(app, host="0.0.0.0", port=5000, threads=threads)
+        except ImportError:
+            print("Waitress not available, falling back to standard Flask development server...")
+            app.run(host="0.0.0.0", port=5000, debug=False)
