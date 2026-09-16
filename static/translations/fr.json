@@ -58,6 +58,8 @@
     "sortByname": "Nom",
     "sortByquantity": "Quantité",
     "sortBylocation": "Emplacement",
+    "sortAsc": "Crois.",
+    "sortDesc": "Décr.",
     "minus_btn_label": "-1 du stock",
     "plus_btn_label": "+1 au stock",
     "locate_btn_label": "Localiser",

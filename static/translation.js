@@ -35,6 +35,7 @@
                     // Translate Tooltips
                     document.getElementById('sortingMethods_text').setAttribute('title', translation.sortingMethods_text);
                     document.getElementById('sortingBytags_text').setAttribute('title', translation.sortingBytags_text);
+                    document.getElementById('settings_btn_tooltip')?.setAttribute('title', translation.offcanvasSettingsLabel);
                     document.getElementById('plus-btn-inventur').setAttribute('title', translation.plus_btn_label);
                     document.getElementById('minus-btn-inventur').setAttribute('title', translation.minus_btn_label);
                     document.getElementById('edit-btn-inventur').setAttribute('title', translation.edit_btn_label);
@@ -138,11 +139,27 @@
                     document.getElementById('cropCancel').textContent = translation.cancel_btn_label;
                     document.getElementById('cropImageModalLabel').textContent = translation.cropImageModalLabel;
                     document.getElementById('espDeleteModalLabel').textContent = translation.espDeleteModalLabel;
-                    document.getElementById('sortBybox').textContent = translation.sortBybox;
-                    document.getElementById('sortByid').textContent = translation.sortByid;
-                    document.getElementById('sortByname').textContent = translation.sortByname;
-                    document.getElementById('sortByquantity').textContent = translation.sortByquantity;
-                    document.getElementById('sortBylocation').textContent = translation.sortBylocation;
+                    const setSortText = (id, text) => {
+                        const el = document.getElementById(id);
+                        if (!el) return;
+                        const label = el.querySelector('.sort-label');
+                        if (label) {
+                            label.textContent = text;
+                        } else {
+                            el.textContent = text;
+                        }
+                    };
+                    setSortText('sortBybox', translation.sortBybox);
+                    setSortText('sortByid', translation.sortByid);
+                    setSortText('sortByname', translation.sortByname);
+                    setSortText('sortByquantity', translation.sortByquantity);
+                    setSortText('sortBylocation', translation.sortBylocation);
+                    if (translation.sortAsc && document.getElementById('sortAsc_text')) {
+                        document.getElementById('sortAsc_text').textContent = translation.sortAsc;
+                    }
+                    if (translation.sortDesc && document.getElementById('sortDesc_text')) {
+                        document.getElementById('sortDesc_text').textContent = translation.sortDesc;
+                    }
                     
 
 

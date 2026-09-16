@@ -209,13 +209,28 @@ def get_unique_ips_from_database():
 
 
 def is_valid_url_or_ip(input_str):
-    ip_pattern = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")  # Simple IP address regex
-    url_pattern = re.compile(r"([a-zA-Z0-9-]+)\.([a-zA-Z]{2,})")
+    if not input_str or not isinstance(input_str, str):
+        return False
+    parts = input_str.strip().split(':')
+    if len(parts) > 2:
+        return False
+    host = parts[0]
+    if len(parts) == 2:
+        try:
+            port = int(parts[1])
+            if port < 1 or port > 65535:
+                return False
+        except ValueError:
+            return False
 
-    if ip_pattern.match(input_str):
-        return True
+    ip_pattern = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+    if ip_pattern.match(host):
+        octets = host.split('.')
+        return all(0 <= int(o) <= 255 for o in octets)
 
-    return bool(url_pattern.match(input_str))
+    url_pattern = re.compile(r"^([a-zA-Z0-9-]+)\.([a-zA-Z0-9.-]+)$")
+    return bool(url_pattern.match(host))
+
 
 
 def set_global_settings():
@@ -281,7 +296,126 @@ def esps():
         return jsonify({"error": "Method not allowed"}), 405
 
 
+def double_flash_esp(target_ip):
+    """
+    Executes a double-flash pulse sequence: 1s ON, 1s OFF, 1s ON, OFF/restore.
+    Runs asynchronously in a background thread so client response is not delayed.
+    """
+    try:
+        prev_state = None
+        try:
+            r = requests.get(f"http://{target_ip}/json/state", timeout=1.5)
+            if r.status_code == 200:
+                prev_state = r.json()
+        except Exception:
+            pass
+
+        flash_on = {"on": True, "bri": 180, "transition": 0}
+        flash_off = {"on": False, "transition": 0}
+
+        # Pulse 1: 1s on, 1s off
+        send_request(target_ip, flash_on)
+        time.sleep(1.0)
+        send_request(target_ip, flash_off)
+        time.sleep(1.0)
+
+        # Pulse 2: 1s on, then off or restore
+        send_request(target_ip, flash_on)
+        time.sleep(1.0)
+
+        if prev_state and prev_state.get('on'):
+            send_request(target_ip, {
+                "on": True,
+                "bri": prev_state.get('bri', 128),
+                "transition": 0
+            })
+        else:
+            send_request(target_ip, flash_off)
+    except Exception as e:
+        print(f"Error during double-flash on {target_ip}: {e}")
+
+
+@app.route('/api/esp/test', methods=['POST'])
+@app.route('/api/esp/test/', methods=['POST'])
+def test_esp_connection():
+    data = request.get_json(silent=True) or {}
+    ip = (data.get('ip') or data.get('esp_ip') or '').strip()
+
+    if not ip:
+        return jsonify({"success": False, "error": "IP address or hostname is required."}), 400
+
+    if not is_valid_url_or_ip(ip):
+        return jsonify({"success": False, "error": f"'{ip}' is not a valid IP address or hostname format."}), 400
+
+    try:
+        url = f"http://{ip}/json/info"
+        response = requests.get(url, timeout=3.0)
+
+        if response.status_code != 200:
+            return jsonify({
+                "success": False,
+                "error": f"Device responded with HTTP status {response.status_code}, expected 200 OK."
+            }), 200
+
+        try:
+            info = response.json()
+        except (ValueError, json.JSONDecodeError):
+            return jsonify({
+                "success": False,
+                "error": f"Device at {ip} responded, but did not return valid JSON. It does not appear to be a WLED device."
+            }), 200
+
+        if isinstance(info, dict) and ('ver' in info or 'leds' in info or info.get('brand') == 'WLED'):
+            device_name = info.get('name', 'WLED')
+            version = info.get('ver', 'Unknown')
+            led_count = info.get('leds', {}).get('count') if isinstance(info.get('leds'), dict) else None
+
+            # Spawn double-flash pulse asynchronously in a background thread
+            threading.Thread(target=double_flash_esp, args=(ip,), daemon=True).start()
+
+            detail = f"Verified WLED device: \"{device_name}\" (v{version}"
+            if led_count is not None:
+                detail += f", {led_count} LEDs"
+            detail += "). Pulsing lights..."
+
+            return jsonify({
+                "success": True,
+                "message": detail,
+                "name": device_name,
+                "version": version,
+                "led_count": led_count
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": f"Device at {ip} responded, but lacks WLED signatures. It does not appear to be a WLED controller."
+            }), 200
+
+    except requests.exceptions.ConnectTimeout:
+        port_suffix = f" on port {ip.split(':')[1]}" if ':' in ip else " on port 80"
+        return jsonify({
+            "success": False,
+            "error": f"Connection timed out while trying to reach {ip}{port_suffix}."
+        }), 200
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            "success": False,
+            "error": f"Could not connect to device at {ip} (Connection refused or host unreachable)."
+        }), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "success": False,
+            "error": f"Failed to connect to device at {ip}: {str(e)}"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Unexpected error while testing {ip}: {str(e)}"
+        }), 200
+
+
 @app.route('/api/esp/<id>', methods=['GET', 'PUT', 'DELETE'])
+
 def handle_esp(id):
     if request.method == 'GET':
         esp_data = db.get_esp_settings_by_ip(id)

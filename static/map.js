@@ -12,10 +12,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
 document.getElementById('open-map-btn').addEventListener('click', openMapModal);
 
-function openMapModal() {
+async function openMapModal() {
+    // Refresh ESPs if empty
+    if (!ESPs || ESPs.length === 0) {
+        try {
+            const espRes = await fetch('/api/esp');
+            if (espRes.ok) ESPs = await espRes.json();
+        } catch (e) {
+            console.error('Error fetching ESPs for map:', e);
+        }
+    }
+
     if (!ESPs || ESPs.length === 0) {
         alert('No ESP devices configured.');
         return;
+    }
+
+    // Always fetch latest items from the server so the map is guaranteed to be current without page reload
+    try {
+        const itemRes = await fetch('/api/items');
+        if (itemRes.ok) {
+            fetchedItems = await itemRes.json();
+        }
+    } catch (e) {
+        console.error('Error refreshing items for map:', e);
     }
 
     // Use currently active ESP filter if set, otherwise single ESP or picker
@@ -147,16 +167,27 @@ function drawMapCanvas(esp) {
     canvas.onclick = (e) => handleMapClick(e, esp, boxSize, lw, startX, startY, serpDir);
 }
 
+function parsePositions(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(Number).filter(n => !isNaN(n));
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n));
+            if (typeof parsed === 'number') return [parsed];
+        } catch (e) {}
+        const cleaned = raw.replace(/[\[\]\s]/g, '');
+        if (!cleaned) return [];
+        return cleaned.split(',').map(Number).filter(n => !isNaN(n));
+    }
+    return [];
+}
+
 function buildOccupancyMap(esp) {
     const occupancy = {};
     (fetchedItems || []).forEach(item => {
         if (!itemBelongsToEsp(item, esp)) return;
-        let positions = [];
-        try {
-            positions = typeof item.position === 'string'
-                ? JSON.parse(item.position)
-                : (Array.isArray(item.position) ? item.position : []);
-        } catch (e) { return; }
+        const positions = parsePositions(item.position);
         positions.forEach(led => {
             if (!occupancy[led]) occupancy[led] = [];
             occupancy[led].push(item);
@@ -166,8 +197,10 @@ function buildOccupancyMap(esp) {
 }
 
 function itemBelongsToEsp(item, esp) {
-    const ip = (item.ip || '').toLowerCase();
-    return ip === esp.name.toLowerCase() || ip === esp.esp_ip.toLowerCase();
+    const ip = (item.ip || '').trim().toLowerCase();
+    const espName = (esp.name || '').trim().toLowerCase();
+    const espIp = (esp.esp_ip || '').trim().toLowerCase();
+    return ip === espName || ip === espIp;
 }
 
 function handleMapClick(event, esp, boxSize, lw, startX, startY, serpDir) {

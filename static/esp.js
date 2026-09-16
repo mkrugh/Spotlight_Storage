@@ -82,6 +82,123 @@ function populateEspTable() {
 }
 
 
+const isValidIPAddress = (ip) => {
+    if (!ip || typeof ip !== 'string') return false;
+    const trimmed = ip.trim();
+    const parts = trimmed.split(':');
+    if (parts.length > 2) return false;
+    const host = parts[0];
+    if (parts.length === 2) {
+        const port = parseInt(parts[1], 10);
+        if (isNaN(port) || port < 1 || port > 65535 || parts[1] !== port.toString()) {
+            return false;
+        }
+    }
+    const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    if (ipRegex.test(host)) {
+        return host.split('.').every(octet => parseInt(octet, 10) <= 255);
+    }
+    const hostRegex = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9\-]+$/;
+    return hostRegex.test(host);
+};
+
+function resetEspTestStatus() {
+    const statusIcon = document.getElementById('esp_ip_status_icon');
+    const feedback = document.getElementById('esp_ip_test_feedback');
+    if (statusIcon) {
+        statusIcon.innerHTML = '';
+        statusIcon.classList.add('d-none');
+    }
+    if (feedback) {
+        feedback.innerHTML = '';
+        feedback.className = 'small mt-2 px-1 d-none';
+    }
+}
+
+function setEspTestStatus(isSuccess, message) {
+    const statusIcon = document.getElementById('esp_ip_status_icon');
+    const feedback = document.getElementById('esp_ip_test_feedback');
+
+    if (statusIcon) {
+        statusIcon.classList.remove('d-none');
+        if (isSuccess) {
+            statusIcon.innerHTML = '<i data-lucide="check" class="text-success"></i>';
+        } else {
+            statusIcon.innerHTML = '<i data-lucide="x" class="text-danger"></i>';
+        }
+    }
+
+    if (feedback) {
+        feedback.classList.remove('d-none');
+        feedback.className = isSuccess ? 'small mt-2 px-1 text-success' : 'small mt-2 px-1 text-danger';
+        feedback.textContent = message;
+    }
+
+    lucide.createIcons();
+}
+
+function testEspConnection() {
+    const ipInput = document.getElementById('esp_ip');
+    const testBtn = document.getElementById('test-esp-btn');
+    const iconSpan = document.getElementById('test-esp-icon');
+    const labelSpan = document.getElementById('test_esp_btn_label');
+
+    const ip = ipInput ? ipInput.value.trim() : '';
+
+    if (!ip) {
+        setEspTestStatus(false, 'Please enter an IP address or hostname.');
+        return;
+    }
+
+    if (!isValidIPAddress(ip)) {
+        setEspTestStatus(false, `'${ip}' is not a valid IP address or hostname format.`);
+        return;
+    }
+
+    // Set loading state
+    if (testBtn) testBtn.disabled = true;
+    if (iconSpan) {
+        iconSpan.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+    }
+    if (labelSpan) {
+        labelSpan.textContent = 'Testing...';
+    }
+    resetEspTestStatus();
+
+    fetch('/api/esp/test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ip: ip })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            setEspTestStatus(true, data.message || 'WLED device connected and verified!');
+        } else {
+            setEspTestStatus(false, data.error || 'Failed to connect to device.');
+        }
+    })
+    .catch(err => {
+        setEspTestStatus(false, `Network request error: ${err.message || err}`);
+    })
+    .finally(() => {
+        if (testBtn) testBtn.disabled = false;
+        if (iconSpan) {
+            iconSpan.innerHTML = '<i data-lucide="wifi"></i>';
+        }
+        if (labelSpan) {
+            labelSpan.textContent = 'Test';
+        }
+        lucide.createIcons();
+    });
+}
+
+// Attach listeners for testing connection and input change
+document.getElementById('test-esp-btn')?.addEventListener('click', testEspConnection);
+document.getElementById('esp_ip')?.addEventListener('input', resetEspTestStatus);
+
 document.getElementById("save-esp-button").addEventListener('click', () => {
     const saveButton = document.getElementById('save-esp-button');
     let espId = saveButton.getAttribute('data-bs-esp-id');
@@ -97,10 +214,6 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
     console.log(startTop, startLeft, serpentineDirection);
 
     const emptyFields = [];
-    const isValidIPAddress = (ip) => {
-        const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-        return ipRegex.test(ip) && ip.split('.').every(octet => parseInt(octet, 10) <= 255);
-    };
 
     if (handleEmptyFields('esp')) return;
     if (!isValidIPAddress(esp_ip)) {
@@ -182,8 +295,9 @@ document.getElementById('esp-delete-modal').addEventListener('show.bs.modal', fu
 
 });
 document.getElementById('esp-modal').addEventListener('show.bs.modal', function (event) {
+    resetEspTestStatus();
     const button = event.relatedTarget;
-    const mode = button.getAttribute('data-bs-mode');
+    const mode = button ? button.getAttribute('data-bs-mode') : null;
     if (mode === "edit") {
         document.getElementById('esp-modal-label').innerHTML = "Edit WLED";
         document.getElementById('save-esp-button').innerHTML = "<span class=\"icon-n4px\"><i data-lucide=\"save\" class=\"me-2\"></i>Save</span>";
@@ -259,6 +373,7 @@ document.getElementById('esp_serpentine').addEventListener('change', function ()
     drawGrid("esp");
 });
 document.getElementById('esp-modal').addEventListener('hidden.bs.modal', function () {
+    resetEspTestStatus();
 
     document.getElementById('esp-modal-label').innerHTML = "Add WLED"; // Set the modal label back to its initial state
     document.getElementById('save-esp-button').innerHTML = "<span class=\"icon-n4px\"><i data-lucide=\"save\" class=\"me-2\"></i>Save</span>";

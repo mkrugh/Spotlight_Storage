@@ -58,6 +58,8 @@
     "sortByname": "Naam",
     "sortByquantity": "Aantal",
     "sortBylocation": "Locatie",
+    "sortAsc": "Oplopend",
+    "sortDesc": "Aflopend",
     "minus_btn_label": "-1 van Voorraad",
     "plus_btn_label": "+1 naar Voorraad",
     "locate_btn_label": "Lokaliseren",

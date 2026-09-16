@@ -54,36 +54,40 @@
                     <a class="nav-link" href="https://youtu.be/7C4i-2IqSS4" target="_blank">Tutorial<i data-lucide="external-link" class="ms-1" style="height:20px; margin-top:-6px;"></i></a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://github.com/FireMarshmellow/M.I.M.O.S.A" target="_blank">GitHub Repo<i data-lucide="external-link" class="ms-1" style="height:20px; margin-top:-6px;"></i></a>
+                    <a class="nav-link" href="https://github.com/mkrugh/Spotlight_Storage" target="_blank">GitHub Repo<i data-lucide="external-link" class="ms-1" style="height:20px; margin-top:-6px;"></i></a>
                 </li>-->
             </ul>
 
-            <div class="row ml-4">
-                <div class="col-12">
-                    <div class="input-group mb-2 mb-md-0">
-                        <div class="d-flex align-items-center position-relative w-100 me-0 me-md-2">
-                            <input type="text" class="form-control flex-grow-1" placeholder="Search items..." id="search">
-                            <i data-lucide="search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);"></i>
-                        </div>
-                    </div>
-                </div>
+            <div class="d-flex align-items-center position-relative ms-2 me-0 me-md-2 mb-2 mb-md-0" style="min-width: 130px; max-width: 250px;">
+                <input type="text" class="form-control flex-grow-1" placeholder="Search items..." id="search" style="padding-right: 32px;">
+                <i data-lucide="search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"></i>
             </div>
 
 
-            <div class="dropdown" data-bs-toggle="tooltip" id="sortingMethods_text" title="Sorting methods">
-                <button class="btn btn-outline-secondary my-2 my-md-0 me-0 me-md-2 dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingMethods_text" title="Sorting methods">
+                <button class="btn btn-outline-secondary my-2 my-md-0 me-0 me-md-2 dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                     <i data-lucide="arrow-down-up"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" id="sort_method">
-                    <li><a id="sortBybox" class="dropdown-item" href="#" onclick="sortItems('ip')"><i data-lucide="arrow-down-0-1" class="me-2"></i>Box</a></li>
-                    <li><a id="sortByid" class="dropdown-item" href="#" onclick="sortItems('id')"><i data-lucide="arrow-down-0-1" class="me-2"></i>ID</a></li>
-                    <li><a id="sortByname" class="dropdown-item" href="#" onclick="sortItems('name')"><i data-lucide="arrow-down-a-z" class="me-2"></i>Name</a></li>
-                    <li><a id="sortByquantity" class="dropdown-item" href="#" onclick="sortItems('quantity')"><i data-lucide="arrow-down-0-1" class="me-2"></i>Quantity</a>
-                    <li><a id="sortBylocation" class="dropdown-item" href="#" onclick="sortItems('position')"><i data-lucide="arrow-down-0-1" class="me-2"></i>Location</a>
+                    <li class="px-2 py-1">
+                        <div class="btn-group w-100 btn-group-sm" role="group" aria-label="Sort direction">
+                            <button type="button" class="btn btn-outline-primary active" id="sort-dir-asc" onclick="setSortDirection('asc', event)">
+                                <i data-lucide="arrow-up" class="me-1"></i><span id="sortAsc_text">Asc</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="sort-dir-desc" onclick="setSortDirection('desc', event)">
+                                <i data-lucide="arrow-down" class="me-1"></i><span id="sortDesc_text">Desc</span>
+                            </button>
+                        </div>
                     </li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li><a id="sortBybox" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('ip', event)"><span class="d-flex align-items-center"><i data-lucide="box" class="me-2"></i><span class="sort-label">Box</span></span><span class="sort-indicator ms-2"></span></a></li>
+                    <li><a id="sortByid" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('id', event)"><span class="d-flex align-items-center"><i data-lucide="hash" class="me-2"></i><span class="sort-label">ID</span></span><span class="sort-indicator ms-2"></span></a></li>
+                    <li><a id="sortByname" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('name', event)"><span class="d-flex align-items-center"><i data-lucide="type" class="me-2"></i><span class="sort-label">Name</span></span><span class="sort-indicator ms-2"></span></a></li>
+                    <li><a id="sortByquantity" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('quantity', event)"><span class="d-flex align-items-center"><i data-lucide="boxes" class="me-2"></i><span class="sort-label">Quantity</span></span><span class="sort-indicator ms-2"></span></a></li>
+                    <li><a id="sortBylocation" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('position', event)"><span class="d-flex align-items-center"><i data-lucide="map-pin" class="me-2"></i><span class="sort-label">Location</span></span><span class="sort-indicator ms-2"></span></a></li>
                 </ul>
             </div>
-            <div class="dropdown" data-bs-toggle="tooltip" id="sortingBytags_text" title="Sorting by Tags">
+            <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingBytags_text" title="Sorting by Tags">
                 <button class="btn btn-outline-secondary my-2 my-md-0 me-0 me-md-2 dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                     <i data-lucide="filter"></i>
                 </button>
@@ -91,9 +95,11 @@
                 </ul>
             </div>
 
-            <button class="btn btn-outline-secondary my-2 my-md-0 icon-n6px" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSettings" aria-controls="offcanvasExample">
-                <i data-lucide="settings"></i>
-            </button>
+            <div data-bs-toggle="tooltip" data-bs-trigger="hover" id="settings_btn_tooltip" title="Settings">
+                <button class="btn btn-outline-secondary my-2 my-md-0 icon-n6px" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSettings" aria-controls="offcanvasExample">
+                    <i data-lucide="settings"></i>
+                </button>
+            </div>
 
 
 
@@ -226,22 +232,13 @@
             <div class="form-floating mb-3">
                 <div class="row">
                     <div class="col-4">
-                        <a href="https://github.com/FireMarshmellow/M.I.M.O.S.A" target="_blank" class="btn btn-link">GitHub</a>
+                        <a href="https://github.com/mkrugh/Spotlight_Storage" target="_blank" class="btn btn-link">GitHub</a>
                     </div>
                     <div class="col-4">
-                        <a href="https://github.com/FireMarshmellow/M.I.M.O.S.A/issues" target="_blank" class="btn btn-link">Bug Report</a>
+                        <a href="https://github.com/mkrugh/Spotlight_Storage/issues" target="_blank" class="btn btn-link">Bug Report</a>
                     </div>
                     <div class="col-4">
                         <a href="https://www.youtube.com/@Mellow_labs" target="_blank" class="btn btn-link">Youtube</a>
-                    </div>
-                    <div class="col-4">
-                        <a href="https://www.paypal.com/paypalme/Mellowfire" target="_blank" class="btn btn-link">Paypal</a>
-                    </div>
-                    <div class="col-4">
-                        <a href="https://www.patreon.com/Mellow_labs" target="_blank" class="btn btn-link">Patreon</a>
-                    </div>
-                    <div class="col-4">
-                        <a href="https://discord.gg/bnxkTqQRak" target="_blank" class="btn btn-link">Discord</a>
                     </div>
                 </div>
             </div>
@@ -479,9 +476,19 @@
                         <input type="text" class="form-control" id="esp_name" placeholder="Name" required>
                         <label id="esp_name_text" for="esp_name">Name</label>
                     </div>
-                    <div class="form-floating mb-3">
-                        <input type="text" class="form-control" id="esp_ip" placeholder="IP">
-                        <label id="esp_ip_text" for="esp_ip">IP address</label>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <span id="esp_ip_status_icon" class="me-2 d-none" style="font-size: 1.4rem; line-height: 1;" aria-live="polite"></span>
+                            <div class="form-floating flex-grow-1">
+                                <input type="text" class="form-control" id="esp_ip" placeholder="IP">
+                                <label id="esp_ip_text" for="esp_ip">IP address</label>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary ms-2 px-3 d-inline-flex align-items-center justify-content-center flex-shrink-0" id="test-esp-btn" title="Test WLED Connection">
+                                <span id="test-esp-icon" class="d-inline-flex align-items-center me-2"><i data-lucide="wifi"></i></span>
+                                <span id="test_esp_btn_label">Test</span>
+                            </button>
+                        </div>
+                        <div id="esp_ip_test_feedback" class="small mt-2 px-1 d-none"></div>
                     </div>
                     <div class="row">
                         <div class="col-6 pe-2">

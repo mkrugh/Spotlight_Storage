@@ -89,11 +89,21 @@ async function addItem(event) {
             .then((data) => {
                 // Update the displayed item in the UI
                 item.id = data.id;
+                const idx = fetchedItems.findIndex(i => i.id == editingItemId);
+                if (idx !== -1) {
+                    fetchedItems[idx] = { ...fetchedItems[idx], ...item, id: data.id };
+                }
                 const col = document.getElementById('items-container-grid').querySelector(`div[data-id="${editingItemId}"]`);
                 const updatedCol = createItem(item);
                 document.getElementById('items-container-grid').replaceChild(updatedCol, col);
+                if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
+                    sortItems(currentSortMethod, currentSortDirection);
+                }
                 lucide.createIcons();
                 fetchDataAndLoadTags();
+                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                    drawMapCanvas(currentMapEsp);
+                }
             })
             .catch((error) => console.error(error));
     } else {
@@ -105,11 +115,19 @@ async function addItem(event) {
         })
             .then((response) => response.json())
             .then((data) => {
+                // Keep in-memory fetchedItems synchronized
+                fetchedItems.push(data);
                 // Create and append the new item to the UI
                 const col = createItem(data);
                 document.getElementById('items-container-grid').appendChild(col);
+                if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
+                    sortItems(currentSortMethod, currentSortDirection);
+                }
                 lucide.createIcons();
                 fetchDataAndLoadTags();
+                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                    drawMapCanvas(currentMapEsp);
+                }
             })
             .catch((error) => console.error(error));
     }
@@ -330,6 +348,10 @@ function createItem(item) {
             // Delete item from database
             fetch(`/api/items/${id}`, { method: "DELETE" })
                 .then(() => {
+                    const idx = fetchedItems.findIndex(i => i.id == id);
+                    if (idx !== -1) {
+                        fetchedItems.splice(idx, 1);
+                    }
                     const col = itemsContainer.querySelector(`div[data-id="${id}"]`);
                     col.parentNode.removeChild(col);
                     const deleteTooltip = bootstrap.Tooltip.getInstance(col.querySelector('.delete-btn'));
@@ -337,6 +359,9 @@ function createItem(item) {
                         deleteTooltip.hide();
                     }
                     fetchDataAndLoadTags();
+                    if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                        drawMapCanvas(currentMapEsp);
+                    }
                 })
                 .catch((error) => console.error(error));
         }
@@ -599,35 +624,139 @@ function resetModal() {
 
 }
 
-function sortItems(sortMethod) {
-    const itemsContainer = document.getElementById('items-container-grid');
-    // Get the list of items
-    const items = Array.from(itemsContainer.children);
-    // Sort the items based on the selected sorting method
+let currentSortMethod = '';
+let currentSortDirection = 'asc';
 
-    const sortedItems = items.sort((a, b) => {
-        let itemA = a.dataset[sortMethod];
-        let itemB = b.dataset[sortMethod];
-        if (sortMethod === 'quantity' || sortMethod === 'id') {
-            // Convert values to numbers for numeric comparison
-            return parseInt(itemA, 10) - parseInt(itemB, 10);
+function parseItemPosition(val) {
+    if (!val) return [0, 0];
+    if (Array.isArray(val)) return [Number(val[0]) || 0, Number(val[1]) || 0];
+    if (typeof val === 'string') {
+        const cleaned = val.replace(/[\[\]\s]/g, '');
+        if (!cleaned) return [0, 0];
+        const parts = cleaned.split(',').map(Number);
+        return [parts[0] || 0, parts[1] || 0];
+    }
+    return [0, 0];
+}
+
+function handleSortClick(sortMethod, event) {
+    if (event) {
+        event.preventDefault();
+    }
+    if (currentSortMethod === sortMethod) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortMethod = sortMethod;
+    }
+    sortItems(currentSortMethod, currentSortDirection);
+}
+
+function setSortDirection(direction, event) {
+    if (event) {
+        event.preventDefault();
+    }
+    currentSortDirection = direction;
+    if (!currentSortMethod) {
+        currentSortMethod = 'name';
+    }
+    sortItems(currentSortMethod, currentSortDirection);
+}
+
+function updateSortUI() {
+    const ascBtn = document.getElementById('sort-dir-asc');
+    const descBtn = document.getElementById('sort-dir-desc');
+    if (ascBtn && descBtn) {
+        if (currentSortDirection === 'asc') {
+            ascBtn.classList.add('active');
+            descBtn.classList.remove('active');
+        } else {
+            descBtn.classList.add('active');
+            ascBtn.classList.remove('active');
         }
-        if (sortMethod === 'position') {
-            return itemA[0] - itemB[0];
-        }
-        else {
-            // For other fields, use string comparison
-            return itemA.localeCompare(itemB);
+    }
+
+    const methodMap = {
+        'ip': 'sortBybox',
+        'id': 'sortByid',
+        'name': 'sortByname',
+        'quantity': 'sortByquantity',
+        'position': 'sortBylocation'
+    };
+
+    const arrowIcon = currentSortDirection === 'desc' ? 'arrow-down' : 'arrow-up';
+
+    Object.entries(methodMap).forEach(([method, elemId]) => {
+        const itemEl = document.getElementById(elemId);
+        if (!itemEl) return;
+        const indicator = itemEl.querySelector('.sort-indicator');
+
+        if (method === currentSortMethod) {
+            itemEl.classList.add('active');
+            if (indicator) {
+                indicator.innerHTML = `<i data-lucide="${arrowIcon}"></i>`;
+            }
+        } else {
+            itemEl.classList.remove('active');
+            if (indicator) {
+                indicator.innerHTML = '';
+            }
         }
     });
 
-    // Clear the current list
-    itemsContainer.innerHTML = '';
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
 
-    // Append the sorted items to the list
+function sortItems(sortMethod = currentSortMethod, direction = currentSortDirection) {
+    currentSortMethod = sortMethod || 'name';
+    currentSortDirection = direction || 'asc';
+
+    const itemsContainer = document.getElementById('items-container-grid');
+    if (!itemsContainer) return;
+    const items = Array.from(itemsContainer.children);
+    const modifier = currentSortDirection === 'desc' ? -1 : 1;
+
+    const sortedItems = items.sort((a, b) => {
+        let valA = a.dataset[currentSortMethod] ?? '';
+        let valB = b.dataset[currentSortMethod] ?? '';
+
+        if (currentSortMethod === 'quantity' || currentSortMethod === 'id') {
+            const numA = parseInt(valA, 10) || 0;
+            const numB = parseInt(valB, 10) || 0;
+            if (numA !== numB) {
+                return (numA - numB) * modifier;
+            }
+        } else if (currentSortMethod === 'position') {
+            const posA = parseItemPosition(valA);
+            const posB = parseItemPosition(valB);
+            if (posA[0] !== posB[0]) {
+                return (posA[0] - posB[0]) * modifier;
+            }
+            if (posA[1] !== posB[1]) {
+                return (posA[1] - posB[1]) * modifier;
+            }
+        } else {
+            // String comparison with natural numeric sorting
+            const cmp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+            if (cmp !== 0) {
+                return cmp * modifier;
+            }
+        }
+
+        // Secondary tiebreaker: ID ascending
+        const idA = parseInt(a.dataset.id, 10) || 0;
+        const idB = parseInt(b.dataset.id, 10) || 0;
+        return (idA - idB) * modifier;
+    });
+
+    // Clear and re-append in sorted order
+    itemsContainer.innerHTML = '';
     sortedItems.forEach(item => {
         itemsContainer.appendChild(item);
     });
+
+    updateSortUI();
 }
 document.getElementById("search").addEventListener("input", function (e){
     const itemsContainer = document.getElementById('items-container-grid');
@@ -726,4 +855,77 @@ document.getElementById("cropAndSaveBtn").addEventListener("click", onCropAndSav
 // Event listener for the modal hide event to reset dataset
 document.getElementById('cropImageModal').addEventListener('hidden.bs.modal', function () {
     resetModalAndCropper(this);
+});
+
+// Automatically hide and disable tooltips on dropdowns when opened to prevent covering menus
+document.addEventListener('show.bs.dropdown', function (e) {
+    const dropdown = e.target.closest('.dropdown') || e.target;
+    if (!dropdown) return;
+    const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+        (bootstrap.Tooltip.getInstance(dropdown) ||
+         bootstrap.Tooltip.getInstance(dropdown.querySelector('[data-bs-toggle="dropdown"]')) ||
+         bootstrap.Tooltip.getInstance(dropdown.querySelector('.dropdown-toggle'))) : null;
+    if (tooltip) {
+        tooltip.hide();
+        tooltip.disable();
+    }
+});
+
+document.addEventListener('hidden.bs.dropdown', function (e) {
+    const dropdown = e.target.closest('.dropdown') || e.target;
+    if (!dropdown) return;
+    const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+        (bootstrap.Tooltip.getInstance(dropdown) ||
+         bootstrap.Tooltip.getInstance(dropdown.querySelector('[data-bs-toggle="dropdown"]')) ||
+         bootstrap.Tooltip.getInstance(dropdown.querySelector('.dropdown-toggle'))) : null;
+    if (tooltip) {
+        tooltip.enable();
+    }
+});
+
+document.addEventListener('click', function (e) {
+    const toggleBtn = e.target.closest('[data-bs-toggle="dropdown"]');
+    if (toggleBtn) {
+        const dropdown = toggleBtn.closest('.dropdown');
+        const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+            ((dropdown && bootstrap.Tooltip.getInstance(dropdown)) ||
+             bootstrap.Tooltip.getInstance(toggleBtn)) : null;
+        if (tooltip) {
+            tooltip.hide();
+        }
+    }
+    const offcanvasBtn = e.target.closest('[data-bs-toggle="offcanvas"]');
+    if (offcanvasBtn) {
+        const tooltipEl = document.getElementById('settings_btn_tooltip');
+        if (tooltipEl) {
+            const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+                bootstrap.Tooltip.getInstance(tooltipEl) : null;
+            if (tooltip) {
+                tooltip.hide();
+            }
+        }
+    }
+});
+
+document.addEventListener('show.bs.offcanvas', function () {
+    const tooltipEl = document.getElementById('settings_btn_tooltip');
+    if (tooltipEl) {
+        const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+            bootstrap.Tooltip.getInstance(tooltipEl) : null;
+        if (tooltip) {
+            tooltip.hide();
+            tooltip.disable();
+        }
+    }
+});
+
+document.addEventListener('hidden.bs.offcanvas', function () {
+    const tooltipEl = document.getElementById('settings_btn_tooltip');
+    if (tooltipEl) {
+        const tooltip = (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) ?
+            bootstrap.Tooltip.getInstance(tooltipEl) : null;
+        if (tooltip) {
+            tooltip.enable();
+        }
+    }
 });

@@ -13,10 +13,13 @@ class TestApiEndpointsMisc:
     """
 
     def test_get_index_page(self, client):
-        """Verify root page / returns 200 OK and renders index HTML."""
+        """Verify root page / returns 200 OK and renders index HTML with sorting controls."""
         response = client.get('/')
         assert response.status_code == 200
         assert b'<html' in response.data.lower()
+        assert b'id="sort-dir-asc"' in response.data
+        assert b'id="sort-dir-desc"' in response.data
+        assert b'id="sort_method"' in response.data
 
     def test_get_favicon(self, client):
         """Verify /favicon.ico serves the favicon with correct MIME type."""

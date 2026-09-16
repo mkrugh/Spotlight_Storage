@@ -177,3 +177,66 @@ label {
     -moz-appearance: textfield;
 }
 
+/* WLED Test connection button & status indicator */
+#test-esp-btn {
+    min-height: calc(3.5rem + 2px); /* Matches Bootstrap form-floating height */
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+#test-esp-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+}
+
+#test-esp-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+#esp_ip_status_icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+}
+
+#esp_ip_status_icon svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    stroke-width: 2.5;
+}
+
+/* Sort Dropdown styles */
+#sort_method {
+    min-width: 190px;
+}
+
+#sort_method .btn-group .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+#sort_method .btn-group .btn svg {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.sort-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+}
+
+.sort-indicator svg {
+    width: 1rem;
+    height: 1rem;
+}

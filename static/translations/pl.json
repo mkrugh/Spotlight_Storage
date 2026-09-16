@@ -58,6 +58,8 @@
     "sortByname": "Nazwa",
     "sortByquantity": "Ilość",
     "sortBylocation": "Lokalizacja",
+    "sortAsc": "Rosnąco",
+    "sortDesc": "Malejąco",
     "minus_btn_label": "-1 ze stanu",
     "plus_btn_label": "+1 do stanu",
     "locate_btn_label": "Zlokalizuj",
