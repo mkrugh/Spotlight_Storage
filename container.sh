@@ -30,10 +30,32 @@ success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Helper to check if docker is available
+# Helper to check if docker is available and socket is accessible
 check_docker() {
     if ! command -v docker > /dev/null 2>&1; then
         error "Docker is not installed or not in PATH."
+        exit 1
+    fi
+
+    if ! docker info > /dev/null 2>&1; then
+        # Check if user belongs to 'docker' group but current session lacks active credentials
+        if [ -z "${CONTAINER_REEXEC:-}" ] && command -v sg > /dev/null 2>&1 && sg docker -c "docker info > /dev/null 2>&1"; then
+            export CONTAINER_REEXEC=1
+            local args=""
+            if [ "$#" -gt 0 ]; then
+                args=$(printf "%q " "$@")
+            fi
+            exec sg docker -c "\"${SCRIPT_DIR}/container.sh\" ${args}"
+        fi
+
+        error "Cannot connect to the Docker daemon at unix:///var/run/docker.sock."
+        if [ -e /var/run/docker.sock ]; then
+            warn "Permission denied accessing Docker socket."
+            warn "Log out of your desktop session and back in for 'docker' group membership to take effect."
+            warn "Alternatively, activate the group in your current terminal with: newgrp docker"
+        else
+            warn "Docker daemon does not appear to be running. Start it with: sudo systemctl start docker"
+        fi
         exit 1
     fi
 }
@@ -252,33 +274,43 @@ show_help() {
 # Command dispatch
 case "${1:-help}" in
     start|up)
+        check_docker "$@"
         start_container
         ;;
     stop)
+        check_docker "$@"
         stop_container
         ;;
     restart)
+        check_docker "$@"
         restart_container
         ;;
     build)
+        check_docker "$@"
         build_image
         ;;
     rebuild)
+        check_docker "$@"
         rebuild_container
         ;;
     logs)
+        check_docker "$@"
         show_logs
         ;;
     status|ps)
+        check_docker "$@"
         show_status
         ;;
     shell|exec|bash)
+        check_docker "$@"
         open_shell
         ;;
     clean|down|rm)
+        check_docker "$@"
         clean_container
         ;;
     test)
+        check_docker "$@"
         run_smoke_test
         ;;
     help|--help|-h)
