@@ -154,3 +154,15 @@ label {
         max-width: 14rem;
     }
 }
+
+/* Ensure item card dropdowns render above adjacent cards and are not clipped */
+.card:has(.dropdown-menu.show),
+.card.dropdown-open,
+.grid-item.dropdown-open {
+    z-index: 1050 !important;
+}
+
+.card .dropdown-menu {
+    z-index: 1060;
+    min-width: 9rem;
+}

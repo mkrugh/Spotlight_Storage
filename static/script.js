@@ -245,7 +245,7 @@ function createItem(item) {
 
     // Set inner HTML for the created column
     col.innerHTML = `
-    <div class="card overflow-hidden position-relative">
+    <div class="card position-relative">
         <!-- Image container with tooltip -->
         <div class="overflow-hidden d-flex justify-content-center">
             <img src="${safeUrl(item.image)}" class="card-img-top dynamic-img" alt="${escapeHtml(item.name)}">
@@ -269,10 +269,10 @@ function createItem(item) {
 
                 <!-- Dropdown menu trigger -->
                 <div class="dropdown">
-                    <button class="btn btn-outline-secondary" type="button" id="dropdownMenuButton-${item.id}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn btn-outline-secondary" type="button" id="dropdownMenuButton-${item.id}" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">
                         <span class="icon-n4px"><i data-lucide="more-vertical"></i></span>
                     </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${item.id}">
+                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuButton-${item.id}">
                         <li><a id="copy_item_${item.id}" class="dropdown-item copy-btn" href="#">Copy Item</a></li>
                         <li><a id="delete_item_${item.id}" class="dropdown-item delete-btn" href="#">Delete</a></li>
                         <li><a id="crop_image_${item.id}" class="dropdown-item image-edit-btn" href="#">Crop Image</a></li>
@@ -451,6 +451,24 @@ function createItem(item) {
         editingItemId = item.id;
         editingItemIP = item.ip;
     });
+
+    // Elevate z-index of card and grid column when dropdown menu is open
+    const dropdownBtn = col.querySelector(`#dropdownMenuButton-${item.id}`);
+    const cardEl = col.querySelector('.card');
+    if (dropdownBtn && cardEl) {
+        dropdownBtn.addEventListener('show.bs.dropdown', () => {
+            col.classList.add('dropdown-open');
+            cardEl.classList.add('dropdown-open');
+            cardEl.style.zIndex = '1050';
+            col.style.zIndex = '1050';
+        });
+        dropdownBtn.addEventListener('hidden.bs.dropdown', () => {
+            col.classList.remove('dropdown-open');
+            cardEl.classList.remove('dropdown-open');
+            cardEl.style.zIndex = '';
+            col.style.zIndex = '';
+        });
+    }
 
     // Return the created column element
     return col;
