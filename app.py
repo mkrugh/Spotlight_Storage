@@ -1,13 +1,17 @@
 # Importing necessary modules and packages
+import ipaddress
 import json
+import os
 import re
+import socket
 import threading
+import time
+import urllib.parse
+import uuid
 from flask import Flask, render_template, jsonify, request, send_from_directory, url_for, Response
 
 import db
 import requests
-import time
-import os
 from werkzeug.utils import secure_filename
 
 # Creating a Flask application instance
@@ -27,6 +31,63 @@ app.off_timers = {}  # pending turn-off timers, per ESP IP
 app.request_amount = 0
 
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_PROXY_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB proxy buffer limit
+
+
+def is_safe_public_url(url: str, is_testing: bool = False) -> bool:
+    """Validate that URL points to a public, non-private/loopback address to prevent SSRF."""
+    if not url:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        hostname_lower = hostname.lower()
+        if hostname_lower in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+            return False
+
+        # Direct IP address validation
+        try:
+            ip_obj = ipaddress.ip_address(hostname)
+            if (ip_obj.is_private or ip_obj.is_loopback or
+                ip_obj.is_link_local or ip_obj.is_multicast or
+                ip_obj.is_reserved or ip_obj.is_unspecified):
+                return False
+            return True
+        except ValueError:
+            pass
+
+        # In testing environments, skip live outbound DNS lookup for external domains
+        if is_testing:
+            if hostname_lower.endswith(('.local', '.lan', '.internal', '.localdomain', '.home')):
+                return False
+            return True
+
+        # Resolve hostname via DNS to ensure all target IPs are public
+        addr_info = socket.getaddrinfo(hostname, None)
+        for entry in addr_info:
+            ip_str = entry[4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
+            if (ip_obj.is_private or ip_obj.is_loopback or
+                ip_obj.is_link_local or ip_obj.is_multicast or
+                ip_obj.is_reserved or ip_obj.is_unspecified):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+@app.after_request
+def set_security_headers(response):
+    """Add defensive security headers to all HTTP responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
 
 
 @app.route('/proxy-image', methods=['GET'])
@@ -35,18 +96,35 @@ def proxy_image():
     if not image_url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL'}), 400
 
+    if not is_safe_public_url(image_url, app.config.get('TESTING', False)):
+        return jsonify({'error': 'Invalid URL or restricted host'}), 400
+
     try:
-        response = requests.get(image_url, timeout=5)
+        response = requests.get(image_url, timeout=5, stream=True, allow_redirects=False)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f"Error proxying image: {e}")
         return jsonify({'error': 'Could not fetch image'}), 502
 
-    content_type = response.headers.get('Content-Type', '')
-    if not content_type.startswith('image/'):
+    content_type = response.headers.get('Content-Type', '').lower()
+    # Enforce image MIME types and explicitly disallow SVG to prevent script execution (XSS)
+    if not content_type.startswith('image/') or 'svg' in content_type:
         return jsonify({'error': 'URL does not point to an image'}), 400
 
-    return Response(response.content, content_type=content_type)
+    # Validate Content-Length header if provided
+    content_length = response.headers.get('Content-Length')
+    if content_length:
+        try:
+            if int(content_length) > MAX_PROXY_IMAGE_SIZE:
+                return jsonify({'error': 'Image exceeds maximum allowed size'}), 400
+        except ValueError:
+            pass
+
+    content = getattr(response, 'content', b'')
+    if len(content) > MAX_PROXY_IMAGE_SIZE:
+        return jsonify({'error': 'Image exceeds maximum allowed size'}), 400
+
+    return Response(content, content_type=content_type)
 
 
 # Route to Favicon
@@ -82,8 +160,10 @@ def upload_file():
     if not filename or extension not in ALLOWED_IMAGE_EXTENSIONS:
         return jsonify({'error': 'File type not allowed'}), 400
 
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    return url_for('download_image', name=filename)
+    # Prefix with UUID to prevent overwriting existing files
+    unique_filename = f"{uuid.uuid4().hex}_{filename}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+    return url_for('download_image', name=unique_filename)
 
 
 @app.route('/api/tags', methods=['GET', 'POST'])
@@ -234,15 +314,21 @@ def item(id):
         db.delete_item(id)
         return jsonify({'success': True})
     elif request.method == 'POST':
-
         if request.form.get('action') == 'locate':
-            if is_valid_url_or_ip(item['ip']):
-                ip = item['ip']
+            item_ip = item.get('ip', '')
+            if is_valid_url_or_ip(item_ip):
+                ip = item_ip
             else:
-                ip = db.get_ip_by_name(item['ip'])
-            esp = db.get_esp_settings_by_ip(ip)
-            light(item['position'], ip, esp, item['quantity'])
+                ip = db.get_ip_by_name(item_ip)
 
+            if not ip:
+                return jsonify({'error': 'ESP configuration not found'}), 400
+
+            esp = db.get_esp_settings_by_ip(ip)
+            if not esp:
+                return jsonify({'error': 'ESP device settings not found in database'}), 400
+
+            light(item.get('position', '[]'), ip, esp, item.get('quantity', 1))
             return jsonify({'success': True})
         else:
             return jsonify({'error': 'Invalid action'}), 400
@@ -367,10 +453,27 @@ def set_leds(led_indices, color, off_color, ip, testing=False):
 def light(positions, ip, esp, quantity=1, testing=False):
     # Set global settings
     set_global_settings()
-    positions_list = position_optimization(sorted(json.loads(positions)), esp)
+    if not esp:
+        print(f"Warning: ESP configuration missing for {ip}")
+        return
+
+    try:
+        raw_positions = json.loads(positions) if isinstance(positions, str) else positions
+        if not isinstance(raw_positions, list):
+            raw_positions = []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        raw_positions = []
+
+    positions_list = position_optimization(sorted(raw_positions), esp)
+
+    try:
+        qty = int(quantity)
+    except (ValueError, TypeError):
+        qty = 0
+
     if testing:
         set_leds(positions_list, app.locateColor, app.standbyColor, ip, testing)
-    elif quantity <= 0:
+    elif qty <= 0:
         set_leds(positions_list, "#FF0000", app.standbyColor, ip, testing)
     else:
         set_leds(positions_list, app.locateColor, app.standbyColor, ip, testing)
@@ -378,11 +481,21 @@ def light(positions, ip, esp, quantity=1, testing=False):
 
 def position_optimization(positions, esp):
     segments = []
-    rows = esp['rows']
-    columns = esp['cols']
-    start_y = esp['start_top'].lower()
-    start_x = esp['start_left'].lower()
-    serpentine_direction = esp['serpentine_direction'].lower()
+    if not esp or not positions:
+        return segments
+
+    try:
+        rows = int(esp.get('rows', 1))
+        columns = int(esp.get('cols', 1))
+    except (ValueError, TypeError):
+        return segments
+
+    if rows <= 0 or columns <= 0:
+        return segments
+
+    start_y = str(esp.get('start_top', 'top')).lower()
+    start_x = str(esp.get('start_left', 'left')).lower()
+    serpentine_direction = str(esp.get('serpentine_direction', 'horizontal')).lower()
 
     if start_x == "1":
         start_x = "right"

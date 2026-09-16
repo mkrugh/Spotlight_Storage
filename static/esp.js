@@ -175,9 +175,9 @@ document.getElementById('esp-delete-modal').addEventListener('show.bs.modal', fu
     const button = event.relatedTarget;
     const espName = button.getAttribute('data-bs-esp-name');
     const ipAddress = button.getAttribute('data-bs-esp-ip');
-    // Set device name and IP address in the modal
-    document.getElementById('deviceNameSpan').innerHTML = `<b>${espName}</b>`;
-    document.getElementById('ipAddressSpan').innerHTML = `<b>${ipAddress}</b>`;
+    // Set device name and IP address safely in the modal
+    document.getElementById('deviceNameSpan').textContent = espName;
+    document.getElementById('ipAddressSpan').textContent = ipAddress;
     document.getElementById('confirmDelete').dataset.bsEspId = button.getAttribute('data-bs-esp-id');
 
 });
@@ -323,7 +323,8 @@ function createESPTab(name, onClickHandler, ip) {
         anchor.innerHTML = 'All Boxes';
         anchor.classList.add('active');
     } else {
-        anchor.innerHTML = `${name} <span class="esp_ip" style="color: #888;"></span>`;
+        const safeName = (typeof escapeHtml === 'function') ? escapeHtml(name) : name;
+        anchor.innerHTML = `${safeName} <span class="esp_ip" style="color: #888;"></span>`;
     }
 
     anchor.onclick = onClickHandler;

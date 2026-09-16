@@ -190,8 +190,8 @@ document.getElementById("inventur").addEventListener("click", function () {
     confirmationModal.show();
     function displayItem(index) {
         const currentItem = itemsData[index];
-        text.innerHTML = currentItem.name;
-        amount.innerHTML = currentItem.quantity;
+        text.textContent = currentItem.name;
+        amount.textContent = currentItem.quantity;
         img.src = currentItem.image;
         fetch(`/api/items/${currentItem.id}`, {
             method: "POST",

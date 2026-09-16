@@ -384,8 +384,17 @@ def get_all_tags():
         cursor.execute('SELECT tags FROM items')
         raw_tags = [tag['tags'] for tag in cursor.fetchall() if tag['tags']]
 
-        # Parse the JSON strings representing lists
-        tags = [tag for raw_tag in raw_tags for tag in json.loads(raw_tag)]
+        # Parse tags, defensively handling malformed JSON and legacy formats
+        tags = []
+        for raw_tag in raw_tags:
+            try:
+                parsed = json.loads(raw_tag)
+                if isinstance(parsed, list):
+                    tags.extend(parsed)
+                elif isinstance(parsed, str):
+                    tags.append(parsed)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                tags.extend([t.strip() for t in raw_tag.split(',') if t.strip()])
         # Count the occurrences of each tag
         tag_counts = Counter(tags)
         unique_tags_with_count = [{'tag': tag, 'count': count} for tag, count in tag_counts.items()]

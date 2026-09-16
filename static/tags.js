@@ -121,7 +121,8 @@ function createSortMenuItem(text, onClickHandler, count) {
         anchor.innerHTML = '<span class="icon-n4px"><i data-lucide="x" class="me-2"></i>Clear Tags</span>';
         anchor.classList.add('disabled')
     } else {
-        anchor.innerHTML = `${text} <span class="tag-count" style="color: #888;">(${count})</span>`;
+        const safeText = (typeof escapeHtml === 'function') ? escapeHtml(text) : text;
+        anchor.innerHTML = `${safeText} <span class="tag-count" style="color: #888;">(${count})</span>`;
     }
     div.classList.add('dropdown-divider');
     anchor.onclick = onClickHandler;
