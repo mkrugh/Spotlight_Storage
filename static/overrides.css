@@ -166,3 +166,14 @@ label {
     z-index: 1060;
     min-width: 9rem;
 }
+
+/* Stocktaking quantity input styling */
+#current-item-amount::-webkit-outer-spin-button,
+#current-item-amount::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#current-item-amount[type=number] {
+    -moz-appearance: textfield;
+}
+

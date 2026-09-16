@@ -475,42 +475,77 @@ function createItem(item) {
 }
 
 
-function handleQuantityChange(item, changeValue) {
+function handleQuantitySet(item, newQuantity) {
+    if (!item || !item.id) return;
     const itemId = item.id;
+    let quantity = parseInt(newQuantity, 10);
+    if (isNaN(quantity) || quantity < 0) {
+        quantity = 0;
+    }
+    item.quantity = quantity;
+
+    // Update item card quantity display and data attribute if present in DOM
     const quantityElement = document.getElementById(`quantity-${itemId}`);
     if (quantityElement) {
-        let currentQuantity = parseInt(quantityElement.textContent, 10);
-        if (!isNaN(currentQuantity)) {
-            currentQuantity += changeValue; // Increment or decrement quantity
-            if (currentQuantity < 0) {
-                currentQuantity = 0; // Ensure quantity doesn't go below 0
-            }
-            quantityElement.textContent = currentQuantity.toString(); // Update the displayed quantity
-
-            // Create the updated item object
-            const updatedItem = { quantity: currentQuantity };
-
-            // Make a fetch request to update the quantity in the database
-            fetch(`/api/items/${itemId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Update-Quantity': 'true'  // Custom header to indicate quantity update
-                },
-                body: JSON.stringify(updatedItem),
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('Error updating quantity:', data.error);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error updating quantity:', error);
-                });
+        quantityElement.textContent = quantity.toString();
+        const colElement = quantityElement.closest('[data-quantity]');
+        if (colElement) {
+            colElement.dataset.quantity = quantity;
         }
     }
+
+    // Update stocktaking modal quantity display if currently showing this item
+    const inventurAmount = document.getElementById('current-item-amount');
+    if (inventurAmount && typeof currentnventurItemIndex !== 'undefined' && typeof fetchedItems !== 'undefined') {
+        const activeInventurItem = fetchedItems[currentnventurItemIndex];
+        if (activeInventurItem && activeInventurItem.id === itemId) {
+            if ('value' in inventurAmount) {
+                inventurAmount.value = quantity;
+            } else {
+                inventurAmount.textContent = quantity.toString();
+            }
+        }
+    }
+
+    // Create the updated item object
+    const updatedItem = { quantity: quantity };
+
+    // Make a fetch request to update the quantity in the database
+    fetch(`/api/items/${itemId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Update-Quantity': 'true'  // Custom header to indicate quantity update
+        },
+        body: JSON.stringify(updatedItem),
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error updating quantity:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating quantity:', error);
+        });
 }
+
+
+function handleQuantityChange(item, changeValue) {
+    if (!item || !item.id) return;
+    let currentQuantity = parseInt(item.quantity, 10);
+    if (isNaN(currentQuantity)) {
+        const quantityElement = document.getElementById(`quantity-${item.id}`);
+        if (quantityElement) {
+            currentQuantity = parseInt(quantityElement.textContent, 10);
+        }
+        if (isNaN(currentQuantity)) {
+            currentQuantity = 0;
+        }
+    }
+    handleQuantitySet(item, currentQuantity + changeValue);
+}
+
 
 
 function generateItemsGrid() {

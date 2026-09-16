@@ -356,11 +356,11 @@
                     <!-- Display the text of the current item -->
                     <p id="current-item-text" class="h5 mb-2"></p>
                     <div class="d-flex justify-content-center align-items-center mb-4">
-                        <button id="minus-btn-inventur" class="btn btn-outline-danger me-2 minus-btn" data-bs-toggle="tooltip" title="-1 from stock">
+                        <button type="button" id="minus-btn-inventur" class="btn btn-outline-danger minus-btn" data-bs-toggle="tooltip" title="-1 from stock">
                             <i data-lucide="minus"></i>
                         </button>
-                        <span id="current-item-amount" class="h6 text-muted"></span>
-                        <button id="plus-btn-inventur" class="btn btn-outline-success ms-2 plus-btn" data-bs-toggle="tooltip" title="+1 to stock">
+                        <input type="number" id="current-item-amount" class="form-control text-center mx-2" min="0" step="1" style="max-width: 100px; font-weight: 600; font-size: 1.15rem;" aria-label="Item quantity">
+                        <button type="button" id="plus-btn-inventur" class="btn btn-outline-success plus-btn" data-bs-toggle="tooltip" title="+1 to stock">
                             <i data-lucide="plus"></i>
                         </button>
                     </div>

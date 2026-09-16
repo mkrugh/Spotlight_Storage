@@ -172,9 +172,24 @@ myOffcanvas.addEventListener('show.bs.offcanvas', function () {
 })
 
 let currentnventurItemIndex = 0; // Keep track of the current item index
-document.getElementById('cancel-inventur-button').addEventListener('click', function(){
+
+const inventurModalElement = document.getElementById('inventur-modal');
+if (inventurModalElement) {
+    inventurModalElement.addEventListener('hide.bs.modal', function () {
+        const amount = document.getElementById('current-item-amount');
+        if (amount && document.activeElement === amount) {
+            amount.blur();
+        }
+    });
+    inventurModalElement.addEventListener('hidden.bs.modal', function () {
+        currentnventurItemIndex = 0;
+    });
+}
+
+document.getElementById('cancel-inventur-button')?.addEventListener('click', function () {
     currentnventurItemIndex = 0;
-})
+});
+
 document.getElementById("inventur").addEventListener("click", function () {
     const edit_btn = document.getElementById('edit-btn-inventur');
     const continue_btn = document.getElementById('continue-btn-inventur');
@@ -184,14 +199,46 @@ document.getElementById("inventur").addEventListener("click", function () {
     const minus_btn = document.getElementById('minus-btn-inventur');
     const plus_btn = document.getElementById('plus-btn-inventur');
     // Create an array of objects containing ids and names
-    const itemsData = fetchedItems
+    const itemsData = fetchedItems;
     // Function to display current item
-    const confirmationModal = new bootstrap.Modal(document.getElementById('inventur-modal'));
+    const confirmationModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('inventur-modal'));
     confirmationModal.show();
+
+    function setAmountDisplay(qty) {
+        if (!amount) return;
+        if ('value' in amount) {
+            amount.value = qty;
+        } else {
+            amount.textContent = qty;
+        }
+    }
+
+    function savePendingInput() {
+        if (!itemsData || itemsData.length === 0 || !amount || !('value' in amount)) return;
+        const currentItem = itemsData[currentnventurItemIndex];
+        if (currentItem) {
+            let val = parseInt(amount.value, 10);
+            if (isNaN(val) || val < 0) {
+                val = 0;
+                amount.value = 0;
+            }
+            if (val !== currentItem.quantity) {
+                handleQuantitySet(currentItem, val);
+            }
+        }
+    }
+
     function displayItem(index) {
+        if (!itemsData || itemsData.length === 0) {
+            text.textContent = "No items available";
+            setAmountDisplay(0);
+            img.src = "";
+            return;
+        }
         const currentItem = itemsData[index];
+        if (!currentItem) return;
         text.textContent = currentItem.name;
-        amount.textContent = currentItem.quantity;
+        setAmountDisplay(currentItem.quantity);
         img.src = currentItem.image;
         fetch(`/api/items/${currentItem.id}`, {
             method: "POST",
@@ -202,25 +249,50 @@ document.getElementById("inventur").addEventListener("click", function () {
 
     // Display the first item
     displayItem(currentnventurItemIndex);
-    minus_btn.onclick = function() {
+
+    minus_btn.onclick = function () {
+        if (!itemsData || itemsData.length === 0) return;
         const currentItem = itemsData[currentnventurItemIndex];
-        handleQuantityChange(currentItem, -1);
-        amount.innerHTML = currentItem.quantity - 1;
+        if (currentItem) {
+            handleQuantityChange(currentItem, -1);
+            setAmountDisplay(currentItem.quantity);
+        }
     };
 
-    plus_btn.onclick = function() {
+    plus_btn.onclick = function () {
+        if (!itemsData || itemsData.length === 0) return;
         const currentItem = itemsData[currentnventurItemIndex];
-        handleQuantityChange(currentItem, + 1);
-        amount.innerHTML = currentItem.quantity + 1 ;
+        if (currentItem) {
+            handleQuantityChange(currentItem, 1);
+            setAmountDisplay(currentItem.quantity);
+        }
     };
 
+    if (amount && 'value' in amount) {
+        amount.onchange = function () {
+            savePendingInput();
+        };
 
-    edit_btn.addEventListener("click", function () {
+        amount.onkeydown = function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                amount.blur();
+            }
+        };
+    }
+
+    document.getElementById('save-inventur-button')?.addEventListener('click', function () {
+        savePendingInput();
+    });
+
+    edit_btn.onclick = function () {
+        if (!itemsData || itemsData.length === 0) return;
+        savePendingInput();
         const currentItem = itemsData[currentnventurItemIndex];
+        if (!currentItem) return;
         isEditingItem = true;
-        console.log("editing item")
+        console.log("editing item");
         removeLocalStorage();
-
 
         $("#item-modal").modal("show");
         confirmationModal.hide();
@@ -230,29 +302,29 @@ document.getElementById("inventur").addEventListener("click", function () {
         document.getElementById("item_quantity").value = currentItem.quantity;
 
         // Set LED positions for editing
-        localStorage.setItem('led_positions', JSON.stringify(currentItem.position))
+        localStorage.setItem('led_positions', JSON.stringify(currentItem.position));
         clickedCells = JSON.parse(localStorage.getItem('led_positions'));
-        localStorage.setItem('edit_led_positions', JSON.stringify(currentItem.position))
-        localStorage.setItem('edit_image_path', JSON.stringify(currentItem.image))
+        localStorage.setItem('edit_led_positions', JSON.stringify(currentItem.position));
+        localStorage.setItem('edit_image_path', JSON.stringify(currentItem.image));
 
         // Set item tags for editing
         if (currentItem.tags) {
             const cleanedTags = currentItem.tags.replace(/[\[\]'"`\\]/g, '');
             const itemTagsArray = cleanedTags.split(',');
-            localStorage.setItem('item_tags', JSON.stringify(itemTagsArray))
+            localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
             tags = itemTagsArray;
-            loadTagsIntoTagify()
+            loadTagsIntoTagify();
         }
 
         // Set editing item ID and IP
         editingItemId = currentItem.id;
         editingItemIP = currentItem.ip;
-        // Check if not already editing an item
-    });
-
+    };
 
     // Handle the "continue" button click
-    continue_btn.addEventListener("click", function () {
+    continue_btn.onclick = function () {
+        if (!itemsData || itemsData.length === 0) return;
+        savePendingInput();
         console.log("Continue clicked for item with ID: " + itemsData[currentnventurItemIndex].id);
         currentnventurItemIndex++; // Move to the next item
         if (currentnventurItemIndex < itemsData.length) {
@@ -263,7 +335,7 @@ document.getElementById("inventur").addEventListener("click", function () {
             currentnventurItemIndex = 0; // Reset to the beginning
             displayItem(currentnventurItemIndex); // Display the first item again
         }
-    });
+    };
 });
 
 
