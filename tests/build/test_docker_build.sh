@@ -8,6 +8,10 @@ CONTAINER_NAME="spotlight-smoke-test"
 TEST_PORT="5099"
 
 echo "=== 1. Building Docker image ==="
+# Fallback to legacy builder if docker buildx is not installed
+if ! docker buildx version > /dev/null 2>&1; then
+    export DOCKER_BUILDKIT=0
+fi
 docker build -t "${IMAGE_NAME}" .
 
 echo "=== 2. Starting test container on port ${TEST_PORT} ==="
