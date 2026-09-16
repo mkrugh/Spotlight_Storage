@@ -144,3 +144,96 @@ class TestMatrixMath:
         res = position_optimization([1], esp)
         assert len(res) == 1
         assert isinstance(res[0], int)
+
+    def test_multi_section_two_tier_cabinet(self):
+        """
+        Two-tier cabinet:
+        Section 0: 4 rows x 6 cols (24 bins: 1..24, LEDs 0..23)
+        Section 1: 2 rows x 3 cols (6 bins: 25..30, LEDs 24..29)
+        """
+        esp = {
+            'name': 'Mixed Cabinet',
+            'rows': 6,
+            'cols': 6,
+            'sections': [
+                {
+                    'name': 'Top Drawers',
+                    'rows': 4,
+                    'cols': 6,
+                    'start_top': 'top',
+                    'start_left': 'left',
+                    'serpentine_direction': 'horizontal'
+                },
+                {
+                    'name': 'Bottom Drawers',
+                    'rows': 2,
+                    'cols': 3,
+                    'start_top': 'top',
+                    'start_left': 'left',
+                    'serpentine_direction': 'horizontal'
+                }
+            ]
+        }
+        # First drawer in Section 0 (row 0, col 0) -> LED 0
+        assert position_optimization([1], esp) == [0]
+        # Fourth drawer in Section 0 (row 0, col 3) -> LED 3
+        assert position_optimization([4], esp) == [3]
+        # First drawer in Section 1 (row 0, col 0 in Section 1) -> LED 24
+        assert position_optimization([25], esp) == [24]
+        # Third drawer in Section 1 (row 0, col 2 in Section 1) -> LED 26
+        assert position_optimization([27], esp) == [26]
+        # Fourth drawer in Section 1 (1st on row 1 in serpentine sequence) -> LED 27
+        assert position_optimization([28], esp) == [27]
+        # Last drawer in Section 1 (3rd on row 1 in serpentine sequence) -> LED 29
+        assert position_optimization([30], esp) == [29]
+        # Multi-selection across both sections
+        multi = position_optimization([1, 25, 28], esp)
+        assert multi == [0, 24, 27]
+
+    def test_multi_section_three_tier_cabinet(self):
+        """
+        Three-tier cabinet with arbitrary N sections:
+        Section 0: 2 rows x 8 cols (16 bins: 1..16, LEDs 0..15)
+        Section 1: 3 rows x 4 cols (12 bins: 17..28, LEDs 16..27)
+        Section 2: 2 rows x 2 cols (4 bins: 29..32, LEDs 28..31)
+        """
+        esp = {
+            'sections': [
+                {'rows': 2, 'cols': 8, 'start_top': 'top', 'start_left': 'left', 'serpentine_direction': 'horizontal'},
+                {'rows': 3, 'cols': 4, 'start_top': 'top', 'start_left': 'left', 'serpentine_direction': 'horizontal'},
+                {'rows': 2, 'cols': 2, 'start_top': 'top', 'start_left': 'left', 'serpentine_direction': 'horizontal'}
+            ]
+        }
+        # Section 0 start
+        assert position_optimization([1], esp) == [0]
+        # Section 1 start (bin 17 -> LED 16)
+        assert position_optimization([17], esp) == [16]
+        # Section 2 start (bin 29 -> LED 28)
+        assert position_optimization([29], esp) == [28]
+        # Section 2 end (bin 32 -> 4th bin in Section 2 -> LED 31)
+        assert position_optimization([32], esp) == [31]
+
+    def test_multi_section_custom_start_direction(self):
+        """
+        Section with start_left = 'right'.
+        """
+        esp = {
+            'sections': [
+                {'rows': 2, 'cols': 4, 'start_top': 'top', 'start_left': 'left', 'serpentine_direction': 'horizontal'},
+                {'rows': 2, 'cols': 4, 'start_top': 'top', 'start_left': 'right', 'serpentine_direction': 'horizontal'}
+            ]
+        }
+        # Bin 9 is row 0, col 0 of Section 1. Since start_left is right, col 0 is at the far right -> LED 8 + 3 = 11
+        assert position_optimization([9], esp) == [11]
+
+    def test_multi_section_out_of_bounds_handling(self):
+        """
+        Positions outside the configured section bin counts should be safely ignored.
+        """
+        esp = {
+            'sections': [
+                {'rows': 2, 'cols': 2, 'start_top': 'top', 'start_left': 'left', 'serpentine_direction': 'horizontal'}
+            ]
+        }
+        # Bins 1..4 valid, 0 and 99 invalid
+        assert position_optimization([0, 2, 99], esp) == [1]

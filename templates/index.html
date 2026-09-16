@@ -490,48 +490,71 @@
                         </div>
                         <div id="esp_ip_test_feedback" class="small mt-2 px-1 d-none"></div>
                     </div>
-                    <div class="row">
-                        <div class="col-6 pe-2">
-                            <div class="form-floating mb-3">
-                                <input type="number" class="form-control" id="esp_rows" placeholder="4" min="1" value="4" required>
-                                <label id="esp_rows_text" for="esp_rows">Rows</label>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1" id="esp_grid_type_label">Grid Layout Type</label>
+                        <div class="btn-group w-100" role="group" aria-label="Grid layout type">
+                            <input type="radio" class="btn-check" name="esp_grid_type" id="esp_grid_type_single" value="single" checked autocomplete="off">
+                            <label class="btn btn-outline-primary" for="esp_grid_type_single" id="esp_grid_single_btn">Standard Grid</label>
+                            <input type="radio" class="btn-check" name="esp_grid_type" id="esp_grid_type_multi" value="multi" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="esp_grid_type_multi" id="esp_grid_multi_btn">Multi-Section Grid</label>
+                        </div>
+                    </div>
+
+                    <div id="esp-single-grid-container">
+                        <div class="row">
+                            <div class="col-6 pe-2">
+                                <div class="form-floating mb-3">
+                                    <input type="number" class="form-control" id="esp_rows" placeholder="4" min="1" value="4" required>
+                                    <label id="esp_rows_text" for="esp_rows">Rows</label>
+                                </div>
+                            </div>
+                            <div class="col-6 ps-2">
+                                <div class="form-floating mb-3">
+                                    <input type="number" class="form-control" id="esp_columns" placeholder="4" min="1" value="4" required>
+                                    <label id="esp_columns_text" for="esp_columns">Columns</label>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-6 ps-2">
-                            <div class="form-floating mb-3">
-                                <input type="number" class="form-control" id="esp_columns" placeholder="4" min="1" value="4" required>
-                                <label id="esp_columns_text" for="esp_columns">Columns</label>
+                        <div class="row">
+                            <div class="col-4 pe-0">
+                                <div class="form-floating mb-3">
+                                    <select class="form-select" id="esp_startx">
+                                        <option id="left_label" selected data-startx="Left">Left</option>
+                                        <option id="right_label"  data-startx="Right">Right</option>
+                                    </select>
+                                    <label id="start_left_label" for="esp_startx">Start Left</label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="form-floating mb-3">
+                                    <select class="form-select" id="esp_starty">
+                                        <option id="top_label" selected data-starty="Top">Top</option>
+                                        <option id="bottom_label"  data-starty="Bottom">Bottom</option>
+                                    </select>
+                                    <label id="start_top_label" for="esp_starty">Start Top</label>
+                                </div>
+                            </div>
+                            <div class="col-4 ps-0">
+                                <div class="form-floating mb-3">
+                                    <select class="form-select" id="esp_serpentine">
+                                        <option id="horizontal_label" selected data-serpentine="Horizontal">Horizontal</option>
+                                        <option id="vertical_label"  data-serpentine="Vertical">Vertical</option>
+                                    </select>
+                                    <label id="serpentine_dir_label" for="esp_serpentine">Serpentine Direction</label>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-4 pe-0">
-                            <div class="form-floating mb-3">
-                                <select class="form-select" id="esp_startx">
-                                    <option id="left_label" selected data-startx="Left">Left</option>
-                                    <option id="right_label"  data-startx="Right">Right</option>
-                                </select>
-                                <label id="start_left_label" for="esp_startx">Start Left</label>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="form-floating mb-3">
-                                <select class="form-select" id="esp_starty">
-                                    <option id="top_label" selected data-starty="Top">Top</option>
-                                    <option id="bottom_label"  data-starty="Bottom">Bottom</option>
-                                </select>
-                                <label id="start_top_label" for="esp_starty">Start Top</label>
-                            </div>
 
+                    <div id="esp-multi-grid-container" class="d-none">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="small fw-semibold text-muted">Cabinet Sections (Stacked Top to Bottom)</span>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="esp-add-section-btn">
+                                <span class="d-inline-flex align-items-center"><i data-lucide="plus" class="me-1" style="width:14px;height:14px;"></i>Add Section</span>
+                            </button>
                         </div>
-                        <div class="col-4 ps-0">
-                            <div class="form-floating mb-3">
-                                <select class="form-select" id="esp_serpentine">
-                                    <option id="horizontal_label" selected data-serpentine="Horizontal">Horizontal</option>
-                                    <option id="vertical_label"  data-serpentine="Vertical">Vertical</option>
-                                </select>
-                                <label id="serpentine_dir_label" for="esp_serpentine">Serpentine Direction</label>
-                            </div>
+                        <div id="esp-sections-list" class="mb-3">
+                            <!-- Dynamically generated section rows -->
                         </div>
                     </div>
                     <div id="esp-canvas-container" class="col-10 mx-auto">

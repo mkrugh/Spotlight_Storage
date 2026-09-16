@@ -174,6 +174,7 @@ function populateEspDropdown() {
                 option.dataset.espStartY = esp.start_top;
                 option.dataset.espStartX = esp.start_left;
                 option.dataset.espSerpentine = esp.serpentine_direction;
+                option.dataset.espSections = esp.sections ? JSON.stringify(esp.sections) : "";
                 option.dataset.espIp = esp.esp_ip;
                 option.dataset.espName = esp.name;
                 option.textContent = esp.name + " (" + esp.esp_ip + ")";

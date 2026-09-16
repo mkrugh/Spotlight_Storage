@@ -3,7 +3,281 @@ let selectedCells = [];
 let occupiedCells = [];
 let isEventListened = false;
 let canvas;
+
+function getActiveSections(mode) {
+    if (mode === "esp") {
+        const isMulti = document.getElementById('esp_grid_type_multi')?.checked;
+        if (isMulti && typeof currentEspSections !== 'undefined' && Array.isArray(currentEspSections) && currentEspSections.length > 0) {
+            return currentEspSections;
+        }
+        return null;
+    } else if (mode === "item") {
+        const selectEspDropdown = document.getElementById('item_esp_select');
+        if (selectEspDropdown && selectEspDropdown.selectedIndex >= 0) {
+            const raw = selectEspDropdown.options[selectEspDropdown.selectedIndex]?.dataset?.espSections;
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                } catch(e) {}
+            }
+        }
+        return null;
+    }
+    return null;
+}
+
+function drawMultiSectionGrid(mode, sections) {
+    const canvasContainer = document.getElementById(mode + '-canvas-container');
+    const responsiveCanvas = document.getElementById(mode + '-responsive-canvas');
+    if (!canvasContainer || !responsiveCanvas) return;
+    const theme = localStorage.getItem('theme');
+
+    let containerStyle = window.getComputedStyle(canvasContainer);
+    let containerPadding = parseFloat(containerStyle.paddingLeft) + parseFloat(containerStyle.paddingRight);
+    let containerWidth = canvasContainer.clientWidth - containerPadding;
+
+    const normalizedSections = sections.map(s => ({
+        rows: Math.max(1, parseInt(s.rows) || 1),
+        cols: Math.max(1, parseInt(s.cols) || 1),
+        start_left: String(s.start_left || 'left').toLowerCase() === '1' ? 'right' : String(s.start_left || 'left').toLowerCase(),
+        start_top: String(s.start_top || 'top').toLowerCase(),
+        serpentine_direction: String(s.serpentine_direction || 'horizontal').toLowerCase() === '1' ? 'vertical' : String(s.serpentine_direction || 'horizontal').toLowerCase()
+    }));
+
+    const totalRows = normalizedSections.reduce((sum, s) => sum + s.rows, 0);
+    const maxCols = Math.max(...normalizedSections.map(s => s.cols));
+    const totalLeds = normalizedSections.reduce((sum, s) => sum + (s.rows * s.cols), 0);
+
+    let lineWidth = 2;
+    let halfLineWidth = lineWidth / 2;
+    let boxHeight = Math.max(50, Math.floor((containerWidth - lineWidth) / maxCols));
+
+    if ((containerWidth - lineWidth) / maxCols < 50) {
+        boxHeight = 50;
+        responsiveCanvas.width = 50 * maxCols + lineWidth;
+        canvasContainer.style.overflowX = 'scroll';
+    } else {
+        responsiveCanvas.width = containerWidth;
+        canvasContainer.style.overflowX = 'hidden';
+    }
+    responsiveCanvas.height = boxHeight * totalRows + lineWidth;
+
+    const ctx = responsiveCanvas.getContext('2d');
+    ctx.clearRect(0, 0, responsiveCanvas.width, responsiveCanvas.height);
+
+    const lineColour = "#0d6efd";
+    const gridColour = "#6c757d";
+
+    let currentSecY = 0;
+    let cumLedOffset = 0;
+    let lastSectionExitPos = null;
+
+    // Draw grid lines, serpentine lines, and section jumpers
+    normalizedSections.forEach((s, secIdx) => {
+        const secHeight = s.rows * boxHeight;
+        const colWidth = (responsiveCanvas.width - lineWidth) / s.cols;
+
+        // Grid lines for this section
+        ctx.strokeStyle = gridColour;
+        ctx.lineWidth = lineWidth;
+        ctx.setLineDash([]);
+
+        // Horizontal grid lines
+        for (let r = 0; r <= s.rows; r++) {
+            const y = currentSecY + r * boxHeight + halfLineWidth;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(responsiveCanvas.width, y);
+            ctx.stroke();
+        }
+        // Vertical grid lines
+        for (let c = 0; c <= s.cols; c++) {
+            const x = c * colWidth + halfLineWidth;
+            ctx.beginPath();
+            ctx.moveTo(x, currentSecY + halfLineWidth);
+            ctx.lineTo(x, currentSecY + secHeight + halfLineWidth);
+            ctx.stroke();
+        }
+
+        // Section divider line
+        if (secIdx > 0) {
+            ctx.lineWidth = lineWidth * 2;
+            ctx.strokeStyle = '#495057';
+            ctx.beginPath();
+            ctx.moveTo(0, currentSecY + halfLineWidth);
+            ctx.lineTo(responsiveCanvas.width, currentSecY + halfLineWidth);
+            ctx.stroke();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = gridColour;
+        }
+
+        // Serpentine wiring line
+        ctx.strokeStyle = lineColour;
+        ctx.lineWidth = lineWidth;
+        if (s.serpentine_direction === "horizontal") {
+            // Horizontal row segments
+            for (let r = 0; r < s.rows; r++) {
+                const y = currentSecY + r * boxHeight + boxHeight / 2 + halfLineWidth;
+                ctx.beginPath();
+                ctx.moveTo(colWidth / 2 + halfLineWidth, y);
+                ctx.lineTo(responsiveCanvas.width - colWidth / 2 - halfLineWidth, y);
+                ctx.stroke();
+            }
+
+            // Vertical turn segments between consecutive rows
+            for (let r = 0; r < s.rows - 1; r++) {
+                let turnOnRight;
+                if (s.start_top === "top") {
+                    turnOnRight = (s.start_left === "left") ? (r % 2 === 0) : (r % 2 === 1);
+                } else {
+                    const fromBottom = s.rows - r - 2;
+                    turnOnRight = (s.start_left === "left") ? (fromBottom % 2 === 0) : (fromBottom % 2 === 1);
+                }
+                const turnX = turnOnRight
+                    ? responsiveCanvas.width - colWidth / 2 - halfLineWidth
+                    : colWidth / 2 + halfLineWidth;
+                const y1 = currentSecY + r * boxHeight + boxHeight / 2 + halfLineWidth;
+                const y2 = currentSecY + (r + 1) * boxHeight + boxHeight / 2 + halfLineWidth;
+
+                ctx.beginPath();
+                ctx.moveTo(turnX, y1);
+                ctx.lineTo(turnX, y2);
+                ctx.stroke();
+            }
+        } else {
+            // Vertical serpentine segments
+            for (let c = 0; c < s.cols; c++) {
+                const x = c * colWidth + colWidth / 2 + halfLineWidth;
+                ctx.beginPath();
+                ctx.moveTo(x, currentSecY + boxHeight / 2 + halfLineWidth);
+                ctx.lineTo(x, currentSecY + secHeight - boxHeight / 2 - halfLineWidth);
+                ctx.stroke();
+            }
+            for (let c = 0; c < s.cols - 1; c++) {
+                let turnOnBottom;
+                if (s.start_left === "left") {
+                    turnOnBottom = (s.start_top === "top") ? (c % 2 === 0) : (c % 2 === 1);
+                } else {
+                    const fromRight = s.cols - c - 2;
+                    turnOnBottom = (s.start_top === "top") ? (fromRight % 2 === 0) : (fromRight % 2 === 1);
+                }
+                const turnY = turnOnBottom
+                    ? currentSecY + secHeight - boxHeight / 2 - halfLineWidth
+                    : currentSecY + boxHeight / 2 + halfLineWidth;
+                const x1 = c * colWidth + colWidth / 2 + halfLineWidth;
+                const x2 = (c + 1) * colWidth + colWidth / 2 + halfLineWidth;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, turnY);
+                ctx.lineTo(x2, turnY);
+                ctx.stroke();
+            }
+        }
+
+        // Inter-section wiring jumper
+        let entryCoords = null;
+        let exitCoords = null;
+        const sectionLedCount = s.rows * s.cols;
+        for (let r = 0; r < s.rows; r++) {
+            for (let c = 0; c < s.cols; c++) {
+                const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                const cx = c * colWidth + colWidth / 2 + halfLineWidth;
+                const cy = currentSecY + r * boxHeight + boxHeight / 2 + halfLineWidth;
+                if (localLed === 1) entryCoords = { x: cx, y: cy };
+                if (localLed === sectionLedCount) exitCoords = { x: cx, y: cy };
+            }
+        }
+
+        if (lastSectionExitPos && entryCoords) {
+            ctx.save();
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = '#20c997'; // Distinct jumper color
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(lastSectionExitPos.x, lastSectionExitPos.y);
+            ctx.lineTo(entryCoords.x, entryCoords.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        lastSectionExitPos = exitCoords;
+        currentSecY += secHeight;
+    });
+
+    // Draw LED circles and drawer numbers
+    currentSecY = 0;
+    cumLedOffset = 0;
+    normalizedSections.forEach(s => {
+        const secHeight = s.rows * boxHeight;
+        const colWidth = (responsiveCanvas.width - lineWidth) / s.cols;
+        const minCellDim = Math.min(colWidth, boxHeight);
+        const circleRadius = minCellDim / 15;
+        const indicatorCircleRadius = minCellDim / 8;
+
+        for (let r = 0; r < s.rows; r++) {
+            for (let c = 0; c < s.cols; c++) {
+                const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                const globalLed = cumLedOffset + localLed;
+
+                const cx = c * colWidth + colWidth / 2 + halfLineWidth;
+                const cy = currentSecY + r * boxHeight + boxHeight / 2 + halfLineWidth;
+
+                const isStart = globalLed === 1;
+                const isEnd = globalLed === totalLeds;
+                const isClicked = mode === "item" && clickedCells.includes(globalLed);
+                const isOccupied = mode === "item" && occupiedCells.includes(globalLed);
+
+                ctx.beginPath();
+                if (isClicked) {
+                    ctx.arc(cx, cy, indicatorCircleRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#003ef8';
+                } else if (isStart) {
+                    ctx.arc(cx, cy, indicatorCircleRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#198754';
+                } else if (isEnd) {
+                    ctx.arc(cx, cy, indicatorCircleRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#dc3545';
+                } else if (isOccupied) {
+                    ctx.arc(cx, cy, minCellDim / 11, 0, Math.PI * 2);
+                    ctx.fillStyle = '#fd7e14';
+                } else {
+                    ctx.arc(cx, cy, circleRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffc107';
+                }
+                ctx.fill();
+
+                // Drawer number text
+                ctx.fillStyle = (theme === 'dark') ? 'white' : 'black';
+                ctx.font = `${minCellDim / 4.5}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(globalLed.toString(), cx + minCellDim / 5, cy - minCellDim / 5);
+            }
+        }
+
+        currentSecY += secHeight;
+        cumLedOffset += s.rows * s.cols;
+    });
+
+    if (mode === "item") {
+        responsiveCanvas.onclick = function (event) {
+            handleCellClick(event, mode);
+        };
+    }
+}
+
+function redrawMultiSectionGrid(mode, sections) {
+    drawMultiSectionGrid(mode, sections);
+}
+
 function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
+    const activeSections = getActiveSections(mode);
+    if (activeSections) {
+        drawMultiSectionGrid(mode, activeSections);
+        return;
+    }
+
     // Convert string values to lowercase
     if (typeof startX === 'string') {
         startX = startX.toLowerCase();
@@ -97,10 +371,6 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
             ctx.lineTo(canvas.width - (boxSize / 2), y);
             ctx.stroke();
         }
-        // Draw vertical lines
-        if (columns > 1) {
-            ctx.setLineDash([boxSize]);
-        }
         if (startY === "top") {
             startIndicatorY = 0;
             endIndicatorY = rows - 1;
@@ -109,27 +379,32 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
             endIndicatorY = 0;
         }
         if (startX === "left") {
-            offset = startY === "top" ? boxSize : (boxSize * (rows % 2)) + boxSize;
             startIndicatorX = 0;
             endIndicatorX = rows % 2 ? columns - 1 : 0;
         } else if (startX === "right") {
-            offset = startY === "top" ? 0 : boxSize * (rows % 2);
             startIndicatorX = columns - 1;
             endIndicatorX = rows % 2 ? 0 : columns - 1;
         }
-        for (let i = 0; i <= columns - 1; i++) {
-            if (i === 0) {
-                ctx.lineDashOffset = offset;
-            } else if (i === columns - 1) {
-                ctx.lineDashOffset = offset + boxSize;
+
+        // Draw vertical turns between rows
+        for (let r = 0; r < rows - 1; r++) {
+            let turnOnRight;
+            if (startY === "top") {
+                turnOnRight = (startX === "left") ? (r % 2 === 0) : (r % 2 === 1);
+            } else {
+                const fromBottom = rows - r - 2;
+                turnOnRight = (startX === "left") ? (fromBottom % 2 === 0) : (fromBottom % 2 === 1);
             }
-            if (i === 0 || i === columns - 1) {
-                ctx.beginPath();
-                let x = (i * boxSize + halfLineWidth) + (boxSize / 2); // Add half of the line width
-                ctx.moveTo(x, boxSize / 2);
-                ctx.lineTo(x, canvas.height - (boxSize / 2));
-                ctx.stroke();
-            }
+            const turnX = turnOnRight
+                ? (columns - 1) * boxSize + boxSize / 2 + halfLineWidth
+                : boxSize / 2 + halfLineWidth;
+            const y1 = r * boxSize + boxSize / 2 + halfLineWidth;
+            const y2 = (r + 1) * boxSize + boxSize / 2 + halfLineWidth;
+
+            ctx.beginPath();
+            ctx.moveTo(turnX, y1);
+            ctx.lineTo(turnX, y2);
+            ctx.stroke();
         }
     } else {
         // Draw vertical lines
@@ -140,65 +415,48 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
             ctx.lineTo(x, canvas.height - (boxSize / 2));
             ctx.stroke();
         }
-        // Draw horizontal lines
-        if (rows > 1) {
-            ctx.setLineDash([boxSize]);
-        }
+
         if (startX === "left" && startY === "top") {
-            offset = boxSize;
             startIndicatorX = 0;
             startIndicatorY = 0;
             endIndicatorX = columns - 1;
-            if (columns % 2) {
-                endIndicatorY = rows - 1;
-            } else {
-                endIndicatorY = 0;
-            }
+            endIndicatorY = columns % 2 ? rows - 1 : 0;
         } else if (startX === "right" && startY === "top") {
-            offset = (boxSize * (columns % 2)) + boxSize;
             startIndicatorX = columns - 1;
             startIndicatorY = 0;
             endIndicatorX = 0;
-            if (columns % 2) {
-                endIndicatorY = rows - 1;
-            } else {
-                endIndicatorY = 0;
-            }
-        }
-        if (startX === "left" && startY === "bottom") {
-            offset = 0;
+            endIndicatorY = columns % 2 ? rows - 1 : 0;
+        } else if (startX === "left" && startY === "bottom") {
             startIndicatorY = rows - 1;
             startIndicatorX = 0;
             endIndicatorX = columns - 1;
-            if (columns % 2) {
-                endIndicatorY = 0;
-            } else {
-                endIndicatorY = rows - 1;
-            }
+            endIndicatorY = columns % 2 ? 0 : rows - 1;
         } else if (startX === "right" && startY === "bottom") {
-            offset = boxSize * (columns % 2);
             startIndicatorY = rows - 1;
             startIndicatorX = columns - 1;
             endIndicatorX = 0;
-            if (columns % 2) {
-                endIndicatorY = 0;
-            } else {
-                endIndicatorY = rows - 1;
-            }
+            endIndicatorY = columns % 2 ? 0 : rows - 1;
         }
-        for (let i = 0; i <= rows - 1; i++) {
-            if (i === 0) {
-                ctx.lineDashOffset = offset;
-            } else if (i === rows - 1) {
-                ctx.lineDashOffset = offset + boxSize;
+
+        // Draw horizontal turns between columns
+        for (let c = 0; c < columns - 1; c++) {
+            let turnOnBottom;
+            if (startX === "left") {
+                turnOnBottom = (startY === "top") ? (c % 2 === 0) : (c % 2 === 1);
+            } else {
+                const fromRight = columns - c - 2;
+                turnOnBottom = (startY === "top") ? (fromRight % 2 === 0) : (fromRight % 2 === 1);
             }
-            if (i === 0 || i === rows - 1) {
-                ctx.beginPath();
-                let y = (i * boxSize + halfLineWidth) + (boxSize / 2); // Add half of the line width
-                ctx.moveTo(boxSize / 2, y);
-                ctx.lineTo(canvas.width - (boxSize / 2), y);
-                ctx.stroke();
-            }
+            const turnY = turnOnBottom
+                ? (rows - 1) * boxSize + boxSize / 2 + halfLineWidth
+                : boxSize / 2 + halfLineWidth;
+            const x1 = c * boxSize + boxSize / 2 + halfLineWidth;
+            const x2 = (c + 1) * boxSize + boxSize / 2 + halfLineWidth;
+
+            ctx.beginPath();
+            ctx.moveTo(x1, turnY);
+            ctx.lineTo(x2, turnY);
+            ctx.stroke();
         }
     }
 
@@ -255,6 +513,54 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
 
 }
 function handleCellClick(event, mode) {
+    const activeSections = getActiveSections(mode);
+    if (activeSections) {
+        const canvas = document.getElementById(mode + '-responsive-canvas');
+        if (!canvas) return;
+        let rect = canvas.getBoundingClientRect();
+        let offsetX = rect.left + window.scrollX;
+        let x = event.clientX - offsetX;
+        let y = event.clientY - rect.top;
+
+        const normalizedSections = activeSections.map(s => ({
+            rows: Math.max(1, parseInt(s.rows) || 1),
+            cols: Math.max(1, parseInt(s.cols) || 1),
+            start_left: String(s.start_left || 'left').toLowerCase() === '1' ? 'right' : String(s.start_left || 'left').toLowerCase(),
+            start_top: String(s.start_top || 'top').toLowerCase(),
+            serpentine_direction: String(s.serpentine_direction || 'horizontal').toLowerCase() === '1' ? 'vertical' : String(s.serpentine_direction || 'horizontal').toLowerCase()
+        }));
+        const maxCols = Math.max(...normalizedSections.map(s => s.cols));
+        let lineWidth = 2;
+        let boxHeight = Math.max(50, Math.floor((canvas.width - lineWidth) / maxCols));
+
+        let currentSecY = 0;
+        let cumLedOffset = 0;
+
+        for (const s of normalizedSections) {
+            const secHeight = s.rows * boxHeight;
+            if (y >= currentSecY && y < currentSecY + secHeight) {
+                const r = Math.max(0, Math.min(s.rows - 1, Math.floor((y - currentSecY) / boxHeight)));
+                const colWidth = (canvas.width - lineWidth) / s.cols;
+                const c = Math.max(0, Math.min(s.cols - 1, Math.floor(x / colWidth)));
+                const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                const globalLed = cumLedOffset + localLed;
+
+                const cellIndex = clickedCells.indexOf(globalLed);
+                if (cellIndex === -1) {
+                    clickedCells.push(globalLed);
+                } else {
+                    clickedCells.splice(cellIndex, 1);
+                }
+
+                redrawMultiSectionGrid(mode, normalizedSections);
+                return;
+            }
+            currentSecY += secHeight;
+            cumLedOffset += s.rows * s.cols;
+        }
+        return;
+    }
+
     const selectEspDropdown = document.getElementById('item_esp_select');
     const rows = parseInt(selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-rows"));
     const columns = parseInt(selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-columns"));
@@ -333,7 +639,13 @@ function calculateLedNumber(row, column, startX, startY, serpentineDirection, ro
 }
 
 function redrawGrid(rows, columns, mode, startX, startY, serpentineDirection) {
-     canvas = document.getElementById(mode + '-responsive-canvas');
+    const activeSections = getActiveSections(mode);
+    if (activeSections) {
+        redrawMultiSectionGrid(mode, activeSections);
+        return;
+    }
+
+    canvas = document.getElementById(mode + '-responsive-canvas');
 
     let ctx = canvas.getContext('2d');
     let lineWidth = 2;
@@ -415,6 +727,13 @@ function clearAll() {
     selectedCells.length = 0;
     // Clear the stored data in the 'led_positions' key
     localStorage.removeItem('led_positions');
+
+    const activeSections = getActiveSections("item");
+    if (activeSections) {
+        redrawMultiSectionGrid("item", activeSections);
+        return;
+    }
+
     const selectEspDropdown = document.getElementById('item_esp_select');
     const rows = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-rows");
     const columns = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-columns");

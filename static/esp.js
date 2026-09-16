@@ -45,6 +45,7 @@ function populateEspTable() {
                 editButton.dataset.bsEspStartY = esp.start_top;
                 editButton.dataset.bsEspStartX = esp.start_left;
                 editButton.dataset.bsEspSerpentinedirection = esp.serpentine_direction;
+                editButton.dataset.bsEspSections = esp.sections ? JSON.stringify(esp.sections) : "";
                 editButton.dataset.bsToggle = "modal";
                 editButton.innerHTML = '<i data-lucide="file-edit" class="text-primary"></i>';
 
@@ -199,26 +200,165 @@ function testEspConnection() {
 document.getElementById('test-esp-btn')?.addEventListener('click', testEspConnection);
 document.getElementById('esp_ip')?.addEventListener('input', resetEspTestStatus);
 
+// Current sections state for multi-section grid builder
+let currentEspSections = [];
+
+function renderEspSectionRows() {
+    const listContainer = document.getElementById('esp-sections-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+
+    currentEspSections.forEach((sec, index) => {
+        const card = document.createElement('div');
+        card.className = 'card mb-2 esp-section-card border';
+        card.innerHTML = `
+            <div class="card-body p-2">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-secondary">Section ${index + 1}</span>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 esp-remove-section-btn" data-index="${index}" title="Remove Section" ${currentEspSections.length <= 1 ? 'disabled' : ''}>
+                        <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6 col-sm-3">
+                        <label class="form-label small mb-1">Rows</label>
+                        <input type="number" class="form-control form-control-sm sec-rows" min="1" value="${sec.rows}">
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <label class="form-label small mb-1">Cols</label>
+                        <input type="number" class="form-control form-control-sm sec-cols" min="1" value="${sec.cols}">
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <label class="form-label small mb-1">Start X</label>
+                        <select class="form-select form-select-sm sec-startx">
+                            <option value="left" ${String(sec.start_left).toLowerCase() === 'left' ? 'selected' : ''}>Left</option>
+                            <option value="right" ${String(sec.start_left).toLowerCase() === 'right' ? 'selected' : ''}>Right</option>
+                        </select>
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <label class="form-label small mb-1">Start Y</label>
+                        <select class="form-select form-select-sm sec-starty">
+                            <option value="top" ${String(sec.start_top).toLowerCase() === 'top' ? 'selected' : ''}>Top</option>
+                            <option value="bottom" ${String(sec.start_top).toLowerCase() === 'bottom' ? 'selected' : ''}>Bottom</option>
+                        </select>
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <label class="form-label small mb-1">Serpentine</label>
+                        <select class="form-select form-select-sm sec-serpentine">
+                            <option value="horizontal" ${String(sec.serpentine_direction).toLowerCase() === 'horizontal' ? 'selected' : ''}>Horiz</option>
+                            <option value="vertical" ${String(sec.serpentine_direction).toLowerCase() === 'vertical' ? 'selected' : ''}>Vert</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const rowsInput = card.querySelector('.sec-rows');
+        const colsInput = card.querySelector('.sec-cols');
+        const startXSelect = card.querySelector('.sec-startx');
+        const startYSelect = card.querySelector('.sec-starty');
+        const serpSelect = card.querySelector('.sec-serpentine');
+
+        const updateSection = () => {
+            currentEspSections[index].rows = Math.max(1, parseInt(rowsInput.value) || 1);
+            currentEspSections[index].cols = Math.max(1, parseInt(colsInput.value) || 1);
+            currentEspSections[index].start_left = startXSelect.value;
+            currentEspSections[index].start_top = startYSelect.value;
+            currentEspSections[index].serpentine_direction = serpSelect.value;
+            drawGrid("esp");
+        };
+
+        rowsInput.addEventListener('change', updateSection);
+        colsInput.addEventListener('change', updateSection);
+        startXSelect.addEventListener('change', updateSection);
+        startYSelect.addEventListener('change', updateSection);
+        serpSelect.addEventListener('change', updateSection);
+
+        const removeBtn = card.querySelector('.esp-remove-section-btn');
+        removeBtn.addEventListener('click', () => {
+            if (currentEspSections.length > 1) {
+                currentEspSections.splice(index, 1);
+                renderEspSectionRows();
+                drawGrid("esp");
+            }
+        });
+
+        listContainer.appendChild(card);
+    });
+
+    lucide.createIcons();
+}
+
+document.getElementById('esp_grid_type_single')?.addEventListener('change', () => {
+    document.getElementById('esp-single-grid-container').classList.remove('d-none');
+    document.getElementById('esp-multi-grid-container').classList.add('d-none');
+    drawGrid("esp");
+});
+
+document.getElementById('esp_grid_type_multi')?.addEventListener('change', () => {
+    document.getElementById('esp-single-grid-container').classList.add('d-none');
+    document.getElementById('esp-multi-grid-container').classList.remove('d-none');
+    if (!currentEspSections || currentEspSections.length === 0) {
+        currentEspSections = [
+            { rows: 4, cols: 6, start_left: 'left', start_top: 'top', serpentine_direction: 'horizontal' },
+            { rows: 2, cols: 3, start_left: 'left', start_top: 'top', serpentine_direction: 'horizontal' }
+        ];
+    }
+    renderEspSectionRows();
+    drawGrid("esp");
+});
+
+document.getElementById('esp-add-section-btn')?.addEventListener('click', () => {
+    const lastSec = currentEspSections[currentEspSections.length - 1];
+    currentEspSections.push({
+        rows: lastSec ? lastSec.rows : 2,
+        cols: lastSec ? lastSec.cols : 3,
+        start_left: lastSec ? lastSec.start_left : 'left',
+        start_top: lastSec ? lastSec.start_top : 'top',
+        serpentine_direction: lastSec ? lastSec.serpentine_direction : 'horizontal'
+    });
+    renderEspSectionRows();
+    drawGrid("esp");
+});
+
 document.getElementById("save-esp-button").addEventListener('click', () => {
     const saveButton = document.getElementById('save-esp-button');
     let espId = saveButton.getAttribute('data-bs-esp-id');
     const name = document.getElementById("esp_name").value;
     const esp_ip = document.getElementById("esp_ip").value;
-    const rows = document.getElementById("esp_rows").value;
-    const cols = document.getElementById("esp_columns").value;
-
-    const startTop = document.querySelector("#esp_starty option:checked").getAttribute("data-starty");
-    const startLeft = document.querySelector("#esp_startx option:checked").getAttribute("data-startx");
-    const serpentineDirection = document.querySelector("#esp_serpentine option:checked").getAttribute("data-serpentine");
-
-    console.log(startTop, startLeft, serpentineDirection);
-
-    const emptyFields = [];
 
     if (handleEmptyFields('esp')) return;
     if (!isValidIPAddress(esp_ip)) {
         showAlert( 'esp-error-alert', "IP Address is not valid.", 'esp');
         return;
+    }
+
+    const isMulti = document.getElementById('esp_grid_type_multi')?.checked;
+    let rows, cols, startTop, startLeft, serpentineDirection, sections = null;
+
+    if (isMulti) {
+        if (!currentEspSections || currentEspSections.length === 0) {
+            showAlert('esp-error-alert', "Please add at least one section.", 'esp');
+            return;
+        }
+        sections = currentEspSections.map(s => ({
+            rows: Math.max(1, parseInt(s.rows) || 1),
+            cols: Math.max(1, parseInt(s.cols) || 1),
+            start_left: s.start_left.toLowerCase(),
+            start_top: s.start_top.toLowerCase(),
+            serpentine_direction: s.serpentine_direction.toLowerCase()
+        }));
+        rows = sections.reduce((acc, s) => acc + s.rows, 0);
+        cols = Math.max(...sections.map(s => s.cols));
+        startTop = sections[0].start_top.charAt(0).toUpperCase() + sections[0].start_top.slice(1);
+        startLeft = sections[0].start_left.charAt(0).toUpperCase() + sections[0].start_left.slice(1);
+        serpentineDirection = sections[0].serpentine_direction.charAt(0).toUpperCase() + sections[0].serpentine_direction.slice(1);
+    } else {
+        rows = parseInt(document.getElementById("esp_rows").value) || 4;
+        cols = parseInt(document.getElementById("esp_columns").value) || 4;
+        startTop = document.querySelector("#esp_starty option:checked").getAttribute("data-starty");
+        startLeft = document.querySelector("#esp_startx option:checked").getAttribute("data-startx");
+        serpentineDirection = document.querySelector("#esp_serpentine option:checked").getAttribute("data-serpentine");
     }
 
     const espItem = {
@@ -228,7 +368,8 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
         cols,
         startTop,
         startLeft,
-        serpentineDirection
+        serpentineDirection,
+        sections
     };
 
     const processESPItem = () => {
@@ -272,11 +413,22 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
             espModal.show();
             document.getElementById("esp_name").value = espItem.name;
             document.getElementById("esp_ip").value = espItem.esp_ip;
-            document.getElementById("esp_rows").value = espItem.rows;
-            document.getElementById("esp_columns").value = espItem.cols;
-            document.getElementById("esp_starty").value = espItem.startTop;
-            document.getElementById("esp_startx").value = espItem.startLeft;
-            document.getElementById("esp_serpentine").value = espItem.serpentineDirection;
+            if (espItem.sections && espItem.sections.length > 0) {
+                document.getElementById('esp_grid_type_multi').checked = true;
+                document.getElementById('esp-single-grid-container').classList.add('d-none');
+                document.getElementById('esp-multi-grid-container').classList.remove('d-none');
+                currentEspSections = [...espItem.sections];
+                renderEspSectionRows();
+            } else {
+                document.getElementById('esp_grid_type_single').checked = true;
+                document.getElementById('esp-single-grid-container').classList.remove('d-none');
+                document.getElementById('esp-multi-grid-container').classList.add('d-none');
+                document.getElementById("esp_rows").value = espItem.rows;
+                document.getElementById("esp_columns").value = espItem.cols;
+                document.getElementById("esp_starty").value = espItem.startTop;
+                document.getElementById("esp_startx").value = espItem.startLeft;
+                document.getElementById("esp_serpentine").value = espItem.serpentineDirection;
+            }
             espId = "";
         }, { once: true });
     } else {
@@ -309,7 +461,15 @@ document.getElementById('esp-modal').addEventListener('show.bs.modal', function 
         const espStartTop = button.getAttribute('data-bs-esp-start-y');
         const espStartLeft = button.getAttribute('data-bs-esp-start-x');
         const espSerpentineDirection = button.getAttribute('data-bs-esp-serpentinedirection');
-        console.log(espSerpentineDirection, espStartTop, espStartLeft);
+        const rawSections = button.getAttribute('data-bs-esp-sections');
+        
+        let parsedSections = null;
+        if (rawSections) {
+            try {
+                parsedSections = JSON.parse(rawSections);
+            } catch(e) {}
+        }
+
         // Set device name and IP address in the modal
         document.getElementById('esp_name').value = espName;
         document.getElementById('esp_ip').value = ipAddress;
@@ -319,6 +479,30 @@ document.getElementById('esp-modal').addEventListener('show.bs.modal', function 
         setSelectedIndexByValue('esp_startx', espStartLeft, 'data-startx');
         setSelectedIndexByValue('esp_serpentine', espSerpentineDirection, 'data-serpentine');
         document.getElementById('save-esp-button').dataset.bsEspId = button.getAttribute('data-bs-esp-id');
+
+        if (parsedSections && Array.isArray(parsedSections) && parsedSections.length > 0) {
+            document.getElementById('esp_grid_type_multi').checked = true;
+            document.getElementById('esp-single-grid-container').classList.add('d-none');
+            document.getElementById('esp-multi-grid-container').classList.remove('d-none');
+            currentEspSections = parsedSections.map(s => ({
+                rows: parseInt(s.rows) || 1,
+                cols: parseInt(s.cols) || 1,
+                start_left: (s.start_left || 'left').toLowerCase(),
+                start_top: (s.start_top || 'top').toLowerCase(),
+                serpentine_direction: (s.serpentine_direction || 'horizontal').toLowerCase()
+            }));
+            renderEspSectionRows();
+        } else {
+            document.getElementById('esp_grid_type_single').checked = true;
+            document.getElementById('esp-single-grid-container').classList.remove('d-none');
+            document.getElementById('esp-multi-grid-container').classList.add('d-none');
+            currentEspSections = [];
+        }
+    } else {
+        document.getElementById('esp_grid_type_single').checked = true;
+        document.getElementById('esp-single-grid-container').classList.remove('d-none');
+        document.getElementById('esp-multi-grid-container').classList.add('d-none');
+        currentEspSections = [];
     }
 });
 
@@ -388,6 +572,13 @@ document.getElementById('esp-modal').addEventListener('hidden.bs.modal', functio
     document.getElementById('esp_startx').selectedIndex = 1;
     document.getElementById('esp_serpentine').selectedIndex = 1;
 
+    document.getElementById('esp_grid_type_single').checked = true;
+    document.getElementById('esp-single-grid-container').classList.remove('d-none');
+    document.getElementById('esp-multi-grid-container').classList.add('d-none');
+    currentEspSections = [];
+    const sectionsList = document.getElementById('esp-sections-list');
+    if (sectionsList) sectionsList.innerHTML = '';
+
     // Clear any existing data attributes
     document.getElementById('save-esp-button').removeAttribute('data-bs-esp-id');
     document.getElementById('save-esp-button').removeAttribute('data-bs-esp-ip');
@@ -397,6 +588,7 @@ document.getElementById('esp-modal').addEventListener('hidden.bs.modal', functio
     document.getElementById('save-esp-button').removeAttribute('data-bs-esp-start-y');
     document.getElementById('save-esp-button').removeAttribute('data-bs-esp-start-x');
     document.getElementById('save-esp-button').removeAttribute('data-bs-esp-serpentinedirection');
+    document.getElementById('save-esp-button').removeAttribute('data-bs-esp-sections');
 });
 
 

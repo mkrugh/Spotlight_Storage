@@ -42,7 +42,8 @@ def create_combined_db():
                 cols INTEGER,
                 start_top TEXT,
                 start_left TEXT,
-                serpentine_direction TEXT
+                serpentine_direction TEXT,
+                sections TEXT
             )
         ''')
 
@@ -83,7 +84,7 @@ def create_combined_db():
     # Check and add new columns if they don't exist
     cursor = conn_combined.cursor()
 
-    # Check for the existence of 'colors' column
+    # Check for the existence of 'colors' and 'language' column in settings
     cursor.execute("PRAGMA table_info(settings)")
     columns = [column[1] for column in cursor.fetchall()]
     if 'colors' not in columns:
@@ -91,6 +92,13 @@ def create_combined_db():
         conn_combined.commit()
     if 'language' not in columns:
         cursor.execute("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'en'")
+        conn_combined.commit()
+
+    # Check for the existence of 'sections' column in esp
+    cursor.execute("PRAGMA table_info(esp)")
+    esp_columns = [column[1] for column in cursor.fetchall()]
+    if 'sections' not in esp_columns:
+        cursor.execute("ALTER TABLE esp ADD COLUMN sections TEXT")
         conn_combined.commit()
 
     return conn_combined
@@ -180,26 +188,62 @@ def delete_item(id):
     conn.close()
 
 
+def _format_esp_dict(row):
+    if row is None:
+        return None
+    d = dict(row)
+    sections_raw = d.get('sections')
+    if sections_raw:
+        if isinstance(sections_raw, str):
+            try:
+                d['sections'] = json.loads(sections_raw)
+            except Exception:
+                d['sections'] = None
+        elif isinstance(sections_raw, list):
+            d['sections'] = sections_raw
+        else:
+            d['sections'] = None
+    else:
+        d['sections'] = None
+    return d
+
+
 # Function to write ESP settings to the database
 def write_esp_settings(esp_settings):
+    sections = esp_settings.get('sections')
+    if isinstance(sections, list) and len(sections) > 0:
+        if not esp_settings.get('rows'):
+            esp_settings['rows'] = sum(int(s.get('rows', 1)) for s in sections)
+        if not esp_settings.get('cols'):
+            esp_settings['cols'] = max(int(s.get('cols', 1)) for s in sections)
+        if not esp_settings.get('startTop'):
+            esp_settings['startTop'] = sections[0].get('start_top', 'Top')
+        if not esp_settings.get('startLeft'):
+            esp_settings['startLeft'] = sections[0].get('start_left', 'Left')
+        if not esp_settings.get('serpentineDirection'):
+            esp_settings['serpentineDirection'] = sections[0].get('serpentine_direction', 'Horizontal')
+
     required_fields = ['name', 'esp_ip', 'rows', 'cols', 'startTop', 'startLeft', 'serpentineDirection']
     if not all(field in esp_settings for field in required_fields):
         print("Missing required fields in esp_settings")
         return None
 
+    sections_str = json.dumps(sections) if sections else None
+
     conn = create_combined_db()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO esp (name, esp_ip, rows, cols, start_top, start_left, serpentine_direction) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO esp (name, esp_ip, rows, cols, start_top, start_left, serpentine_direction, sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 esp_settings['name'],
                 esp_settings['esp_ip'],
-                esp_settings['rows'],
-                esp_settings['cols'],
+                int(esp_settings['rows']),
+                int(esp_settings['cols']),
                 esp_settings['startTop'],
                 esp_settings['startLeft'],
-                esp_settings['serpentineDirection']
+                esp_settings['serpentineDirection'],
+                sections_str
             ])
         lastId = cursor.lastrowid
         conn.commit()
@@ -215,18 +259,34 @@ def write_esp_settings(esp_settings):
 
 # Function to update ESP settings in the database
 def update_esp_settings(id, esp_settings):
+    sections = esp_settings.get('sections')
+    if isinstance(sections, list) and len(sections) > 0:
+        if not esp_settings.get('rows'):
+            esp_settings['rows'] = sum(int(s.get('rows', 1)) for s in sections)
+        if not esp_settings.get('cols'):
+            esp_settings['cols'] = max(int(s.get('cols', 1)) for s in sections)
+        if not esp_settings.get('startTop'):
+            esp_settings['startTop'] = sections[0].get('start_top', 'Top')
+        if not esp_settings.get('startLeft'):
+            esp_settings['startLeft'] = sections[0].get('start_left', 'Left')
+        if not esp_settings.get('serpentineDirection'):
+            esp_settings['serpentineDirection'] = sections[0].get('serpentine_direction', 'Horizontal')
+
+    sections_str = json.dumps(sections) if sections else None
+
     conn = create_combined_db()
     try:
         conn.execute(
-            'UPDATE esp SET name = ?, esp_ip = ?, rows = ?, cols = ?, start_top = ?, start_left = ?, serpentine_direction = ? WHERE id = ?',
+            'UPDATE esp SET name = ?, esp_ip = ?, rows = ?, cols = ?, start_top = ?, start_left = ?, serpentine_direction = ?, sections = ? WHERE id = ?',
             [
                 esp_settings['name'],
                 esp_settings['esp_ip'],
-                esp_settings['rows'],
-                esp_settings['cols'],
+                int(esp_settings['rows']),
+                int(esp_settings['cols']),
                 esp_settings['startTop'],
                 esp_settings['startLeft'],
                 esp_settings['serpentineDirection'],
+                sections_str,
                 id
             ])
         conn.commit()
@@ -243,7 +303,7 @@ def get_esp_settings(id):
     esp_settings = conn.execute('SELECT * FROM esp WHERE id = ?', [id]).fetchone()
     conn.close()
     if esp_settings:
-        return dict(esp_settings)
+        return _format_esp_dict(esp_settings)
     else:
         return None  # Return None if no matching settings are found
 
@@ -252,7 +312,7 @@ def read_esp():
     conn = create_combined_db()
     esps = conn.execute('SELECT * FROM esp').fetchall()
     conn.close()
-    return [dict(esp) for esp in esps]
+    return [_format_esp_dict(esp) for esp in esps]
 
 
 # Function to delete ESP settings from the database by ID
@@ -281,7 +341,7 @@ def get_esp_settings_by_id(id):
         # Convert the row to a dictionary
         esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
-        return esp_settings
+        return _format_esp_dict(esp_settings)
 
     except Exception as e:
         print(f"Database error: {e}")
@@ -303,7 +363,7 @@ def get_esp_settings_by_ip(ip):
 
         # Convert the row to a dictionary
         esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
-        return esp_settings
+        return _format_esp_dict(esp_settings)
 
     except Exception as e:
         print(f"Database error: {e}")

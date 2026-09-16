@@ -97,6 +97,11 @@ function resetMapPanel() {
 }
 
 function drawMapCanvas(esp) {
+    if (esp.sections && Array.isArray(esp.sections) && esp.sections.length > 0) {
+        drawMultiSectionMap(esp);
+        return;
+    }
+
     const rows = parseInt(esp.rows);
     const columns = parseInt(esp.cols);
     let startX = String(esp.start_left).toLowerCase();
@@ -165,6 +170,133 @@ function drawMapCanvas(esp) {
     }
 
     canvas.onclick = (e) => handleMapClick(e, esp, boxSize, lw, startX, startY, serpDir);
+}
+
+function drawMultiSectionMap(esp) {
+    const container = document.getElementById('map-canvas-container');
+    const canvas = document.getElementById('map-responsive-canvas');
+    const lw = 2;
+    const half = lw / 2;
+
+    let containerWidth = container.clientWidth - 4;
+
+    const normalizedSections = esp.sections.map(s => ({
+        rows: Math.max(1, parseInt(s.rows) || 1),
+        cols: Math.max(1, parseInt(s.cols) || 1),
+        start_left: String(s.start_left || 'left').toLowerCase() === '1' ? 'right' : String(s.start_left || 'left').toLowerCase(),
+        start_top: String(s.start_top || 'top').toLowerCase(),
+        serpentine_direction: String(s.serpentine_direction || 'horizontal').toLowerCase() === '1' ? 'vertical' : String(s.serpentine_direction || 'horizontal').toLowerCase()
+    }));
+
+    const totalRows = normalizedSections.reduce((sum, s) => sum + s.rows, 0);
+    const maxCols = Math.max(...normalizedSections.map(s => s.cols));
+
+    let boxHeight = Math.max(50, Math.floor((containerWidth - lw) / maxCols));
+    if ((containerWidth - lw) / maxCols < 50) {
+        boxHeight = 50;
+        canvas.width = 50 * maxCols + lw;
+        container.style.overflowX = 'scroll';
+    } else {
+        canvas.width = containerWidth;
+        container.style.overflowX = 'hidden';
+    }
+    canvas.height = boxHeight * totalRows + lw;
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const occupancy = buildOccupancyMap(esp);
+    const dark = localStorage.getItem('theme') === 'dark';
+
+    let currentSecY = 0;
+    let cumLedOffset = 0;
+
+    normalizedSections.forEach((s, secIdx) => {
+        const secHeight = s.rows * boxHeight;
+        const colWidth = (canvas.width - lw) / s.cols;
+
+        // Grid lines
+        ctx.strokeStyle = '#6c757d';
+        ctx.lineWidth = lw;
+        for (let r = 0; r <= s.rows; r++) {
+            ctx.beginPath();
+            ctx.moveTo(0, currentSecY + r * boxHeight + half);
+            ctx.lineTo(canvas.width, currentSecY + r * boxHeight + half);
+            ctx.stroke();
+        }
+        for (let c = 0; c <= s.cols; c++) {
+            ctx.beginPath();
+            ctx.moveTo(c * colWidth + half, currentSecY + half);
+            ctx.lineTo(c * colWidth + half, currentSecY + secHeight + half);
+            ctx.stroke();
+        }
+
+        // Section divider
+        if (secIdx > 0) {
+            ctx.lineWidth = lw * 2;
+            ctx.strokeStyle = '#495057';
+            ctx.beginPath();
+            ctx.moveTo(0, currentSecY + half);
+            ctx.lineTo(canvas.width, currentSecY + half);
+            ctx.stroke();
+            ctx.lineWidth = lw;
+        }
+
+        // Circles & drawer labels
+        const minCellDim = Math.min(colWidth, boxHeight);
+        for (let r = 0; r < s.rows; r++) {
+            for (let c = 0; c < s.cols; c++) {
+                const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                const ledNum = cumLedOffset + localLed;
+                const cx = c * colWidth + colWidth / 2 + half;
+                const cy = currentSecY + r * boxHeight + boxHeight / 2 + half;
+                const hasItems = !!(occupancy[ledNum] && occupancy[ledNum].length > 0);
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, hasItems ? minCellDim / 8 : minCellDim / 15, 0, Math.PI * 2);
+                ctx.fillStyle = hasItems ? '#fd7e14' : '#ffc107';
+                ctx.fill();
+
+                ctx.fillStyle = dark ? 'white' : 'black';
+                ctx.font = `${minCellDim / 4.5}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(ledNum), cx + minCellDim / 5, cy - minCellDim / 5);
+            }
+        }
+
+        currentSecY += secHeight;
+        cumLedOffset += s.rows * s.cols;
+    });
+
+    canvas.onclick = (e) => handleMultiSectionMapClick(e, esp, normalizedSections, boxHeight, lw);
+}
+
+function handleMultiSectionMapClick(event, esp, sections, boxHeight, lw) {
+    const canvas = document.getElementById('map-responsive-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    let currentSecY = 0;
+    let cumLedOffset = 0;
+
+    for (const s of sections) {
+        const secHeight = s.rows * boxHeight;
+        if (y >= currentSecY && y < currentSecY + secHeight) {
+            const r = Math.max(0, Math.min(s.rows - 1, Math.floor((y - currentSecY) / boxHeight)));
+            const colWidth = (canvas.width - lw) / s.cols;
+            const c = Math.max(0, Math.min(s.cols - 1, Math.floor(x / colWidth)));
+            const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+            const ledNum = cumLedOffset + localLed;
+
+            const occupancy = buildOccupancyMap(esp);
+            renderMapItems(ledNum, occupancy[ledNum] || []);
+            return;
+        }
+        currentSecY += secHeight;
+        cumLedOffset += s.rows * s.cols;
+    }
 }
 
 function parsePositions(raw) {

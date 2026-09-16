@@ -645,9 +645,83 @@ def light(positions, ip, esp, quantity=1, testing=False):
         set_leds(positions_list, app.locateColor, app.standbyColor, ip, testing)
 
 
+def _calc_section_led(pos, rows, columns, start_y, start_x, serpentine_direction):
+    if start_x == "1":
+        start_x = "right"
+    if serpentine_direction == "1":
+        serpentine_direction = "vertical"
+
+    i = pos - 1
+    if serpentine_direction == "horizontal":
+        row = i // columns
+        column = i % columns if row % 2 == 0 else columns - 1 - (i % columns)
+    else:
+        column = i // rows
+        row = i % rows if column % 2 == 0 else rows - 1 - (i % rows)
+
+    if start_x == "right":
+        column = columns - 1 - column
+    if start_y == "bottom":
+        row = rows - 1 - row
+
+    if row % 2 == 0:
+        return row * columns + column
+    else:
+        return row * columns + (columns - 1 - column)
+
+
 def position_optimization(positions, esp):
     segments = []
     if not esp or not positions:
+        return segments
+
+    sections = esp.get('sections')
+    if isinstance(sections, list) and len(sections) > 0:
+        sec_info = []
+        cur_bin = 1
+        cur_led_offset = 0
+        for s in sections:
+            try:
+                s_rows = int(s.get('rows', 1))
+                s_cols = int(s.get('cols', 1))
+            except (ValueError, TypeError):
+                continue
+            if s_rows <= 0 or s_cols <= 0:
+                continue
+            b_count = s_rows * s_cols
+            s_start_y = str(s.get('start_top', esp.get('start_top', 'top'))).lower()
+            s_start_x = str(s.get('start_left', esp.get('start_left', 'left'))).lower()
+            s_serp = str(s.get('serpentine_direction', esp.get('serpentine_direction', 'horizontal'))).lower()
+            sec_info.append({
+                'bin_start': cur_bin,
+                'bin_end': cur_bin + b_count - 1,
+                'led_offset': cur_led_offset,
+                'rows': s_rows,
+                'cols': s_cols,
+                'start_y': s_start_y,
+                'start_x': s_start_x,
+                'serp': s_serp
+            })
+            cur_bin += b_count
+            cur_led_offset += b_count
+
+        if not sec_info:
+            return segments
+
+        for pos in positions:
+            try:
+                pos_int = int(pos)
+            except (ValueError, TypeError):
+                continue
+            for sec in sec_info:
+                if sec['bin_start'] <= pos_int <= sec['bin_end']:
+                    rel_pos = pos_int - sec['bin_start'] + 1
+                    local_led = _calc_section_led(
+                        rel_pos, sec['rows'], sec['cols'],
+                        sec['start_y'], sec['start_x'], sec['serp']
+                    )
+                    segments.append(sec['led_offset'] + local_led)
+                    break
         return segments
 
     try:
@@ -663,39 +737,12 @@ def position_optimization(positions, esp):
     start_x = str(esp.get('start_left', 'left')).lower()
     serpentine_direction = str(esp.get('serpentine_direction', 'horizontal')).lower()
 
-    if start_x == "1":
-        start_x = "right"
-
-    if serpentine_direction == "1":
-        serpentine_direction = "vertical"
-
     for pos in positions:
-        i = pos - 1
-
-        if serpentine_direction == "horizontal":
-            # Handle horizontal serpentine direction
-            row = i // columns
-            column = i % columns if row % 2 == 0 else columns - 1 - (i % columns)
-        else:  # serpentine_direction == "vertical"
-            # Handle vertical serpentine direction
-            column = i // rows
-            row = i % rows if column % 2 == 0 else rows - 1 - (i % rows)
-
-        # Adjust for starting positions
-        if start_x == "right":
-            column = columns - 1 - column
-        if start_y == "bottom":
-            row = rows - 1 - row
-
-        # Calculate the LED number
-        if row % 2 == 0:
-            # Even rows - normal left to right
-            led_number = row * columns + column
-        else:
-            # Odd rows - right to left
-            led_number = row * columns + (columns - 1 - column)
-        # Append the last segment
-        segments.append(led_number)
+        try:
+            pos_int = int(pos)
+        except (ValueError, TypeError):
+            continue
+        segments.append(_calc_section_led(pos_int, rows, columns, start_y, start_x, serpentine_direction))
 
     return segments
 

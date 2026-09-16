@@ -11,6 +11,7 @@ This fork modernizes the codebase, enhances usability, strengthens security, add
 
 ## Features
 
+- **Multi-Section Drawer Cabinets**: Configure mixed-size drawer organizers (e.g. Akro-Mils or custom multi-tier cabinets with smaller drawers on top and wider drawers on bottom) wired as a single sequential WLED matrix with arbitrary sections and column counts.
 - **Visual Inventory Management**: Organize parts with custom names, quantities, direct image uploads (with built-in cropping tool), tags, and supplier links.
 - **WLED ESP Controller Integration**: Seamlessly connect any WS2812 or compatible addressable LED strips and matrix panels running [WLED](https://kno.wled.ge/).
 - **ESP Connection Testing & Status**: Dedicated "Test" button in ESP settings with live status indicator and an automated double-flash LED confirmation pulse. Supports custom hostnames and ports.
@@ -22,7 +23,58 @@ This fork modernizes the codebase, enhances usability, strengthens security, add
 - **Multilingual Support**: Fully translated into 6 languages: English, German, French, Dutch, Finnish, and Polish.
 - **Light & Dark Mode**: Clean Bootstrap 5 interface with responsive theme switching.
 - **Security Hardened**: Built-in SSRF protection, strict path traversal defense, file type verification, secure HTTP headers, and non-root Docker container execution.
-- **Automated Test Suite**: 141 automated unit, integration, and build sanity tests running in under 5 seconds with zero warnings.
+- **Automated Test Suite**: 146 automated unit, integration, and build sanity tests running in under 5 seconds with zero warnings.
+
+---
+
+## Multi-Section Drawer Cabinet Wiring & Setup
+
+Many storage organizers (such as Akro-Mils, Stanley, or custom 3D-printed modular cabinets) combine different drawer sizes in a single physical unit—for example, small drawers on top (6 columns) and wide double-width drawers on the bottom (3 columns), or three tiers of varying column counts.
+
+Spotlight Storage supports **arbitrary $N$-section cabinets** on a single continuous WS2812 LED strip or WLED controller.
+
+### Wiring Topology: Sequential Section-by-Section
+
+The data line runs through Section 1 first, weaves across all its rows, exits, and then jumps down to enter Section 2, continuing sequentially through all remaining sections.
+
+#### Example: 2-Tier Cabinet (Top: 6 cols × 4 rows; Bottom: 3 cols × 2 rows)
+
+```text
+======================= SECTION 1 (6 cols x 4 rows = 24 LEDs) =======================
+  [DIN from ESP]
+        │
+       (1)  ──>  (2)  ──>  (3)  ──>  (4)  ──>  (5)  ──>  (6)   [Row 0: Left to Right]
+                                                            │
+       (12) <──  (11) <──  (10) <──  (9)  <──  (8)  <──  (7)   [Row 1: Right to Left]
+        │
+       (13) ──>  (14) ──>  (15) ──>  (16) ──>  (17) ──>  (18)  [Row 2: Left to Right]
+                                                            │
+   ┌── (24) <──  (23) <──  (22) <──  (21) <──  (20) <──  (19)  [Row 3: Right to Left]
+   │
+   │   [Sequential Jumper Wire drops from Section 1 exit to Section 2 entry]
+   │
+===│=================== SECTION 2 (3 cols x 2 rows = 6 LEDs) =======================
+   └──>(25) ───────>───────> (26) ───────>───────> (27)        [Row 0: Left to Right]
+                                                    │
+       (30) <───────<─────── (29) <───────<─────── (28)        [Row 1: Right to Left]
+        │
+      [DOUT / End of Strip]
+```
+
+### Wiring Notes & Rules:
+1. **Drawer Numbering**: Bins are numbered sequentially along the physical data path ($1 \dots N$). In Section 1, drawers are numbered 1 to 24. In Section 2, drawers continue from 25 to 30.
+2. **Transition Corners & Section Direction**:
+   - An **even number of rows** (e.g. 4 rows) exits on the **same side** as the entry corner.
+   - An **odd number of rows** (e.g. 3 rows) exits on the **opposite side**.
+   - Each section in Spotlight Storage can independently configure its own **Start X** (`Left` or `Right`), **Start Y** (`Top` or `Bottom`), and **Serpentine Direction** (`Horizontal` or `Vertical`). This guarantees you can route jumper wires along the most convenient side of your cabinet without reversing LED indices.
+3. **Arbitrary Column Counts & Section Count**: You can add 2, 3, 4, or more sections stacked vertically. Each section can have its own independent column and row count.
+
+### Software Configuration:
+1. Open **WLED Settings** (`+ Add WLED` or click the edit icon on an existing controller).
+2. Under **Grid Layout Type**, select **Multi-Section Grid**.
+3. Use **Add Section** to add tiers.
+4. For each section, configure its **Rows**, **Cols**, **Start X**, **Start Y**, and **Serpentine** direction. The live preview canvas instantly renders the combined cabinet, showing proportional drawer sizes, serpentine routing lines, and the inter-section jumper connection.
+5. Click **Save**. The LED map, item assignment grid, and WLED illumination logic will automatically handle all multi-section routing.
 
 ---
 
@@ -134,7 +186,7 @@ To access Spotlight Storage from smartphones, tablets, or other devices on your 
 
 ## Testing & Verification
 
-Spotlight Storage includes a full automated test suite with **141 tests** covering unit math, database operations, REST endpoints, WLED pulses, security constraints, and build sanity.
+Spotlight Storage includes a full automated test suite with **146 tests** covering unit math, database operations, REST endpoints, WLED pulses, security constraints, and build sanity.
 
 Run the test suite locally with `pytest`:
 ```bash
