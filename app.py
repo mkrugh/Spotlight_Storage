@@ -54,16 +54,24 @@ def is_safe_public_url(url: str, is_testing: bool = False) -> bool:
         if hostname_lower in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
             return False
 
-        # Direct IP address validation
+        # Direct IP address validation (handles IPv6, standard IPv4, and alternative IPv4 encodings)
+        ip_obj = None
         try:
             ip_obj = ipaddress.ip_address(hostname)
+        except ValueError:
+            try:
+                ip_obj = ipaddress.ip_address(socket.inet_aton(hostname))
+            except (OSError, ValueError):
+                pass
+
+        if ip_obj:
+            if hasattr(ip_obj, 'ipv4_mapped') and ip_obj.ipv4_mapped:
+                ip_obj = ip_obj.ipv4_mapped
             if (ip_obj.is_private or ip_obj.is_loopback or
                 ip_obj.is_link_local or ip_obj.is_multicast or
                 ip_obj.is_reserved or ip_obj.is_unspecified):
                 return False
             return True
-        except ValueError:
-            pass
 
         # In testing environments, skip live outbound DNS lookup for external domains
         if is_testing:
@@ -76,6 +84,8 @@ def is_safe_public_url(url: str, is_testing: bool = False) -> bool:
         for entry in addr_info:
             ip_str = entry[4][0]
             ip_obj = ipaddress.ip_address(ip_str)
+            if hasattr(ip_obj, 'ipv4_mapped') and ip_obj.ipv4_mapped:
+                ip_obj = ip_obj.ipv4_mapped
             if (ip_obj.is_private or ip_obj.is_loopback or
                 ip_obj.is_link_local or ip_obj.is_multicast or
                 ip_obj.is_reserved or ip_obj.is_unspecified):
@@ -159,7 +169,8 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    filename = secure_filename(file.filename)
+    clean_name = os.path.basename(file.filename.replace('\\', '/'))
+    filename = secure_filename(clean_name)
     extension = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if not filename or extension not in ALLOWED_IMAGE_EXTENSIONS:
         return jsonify({'error': 'File type not allowed'}), 400
@@ -227,8 +238,17 @@ def settings():
         # If the request method is GET, read data from the database and return as JSON
         return jsonify(db.read_settings())
     elif request.method == 'POST':
-        db.update_settings(request.get_json())  # Update settings in the database
-        return jsonify({'success': True})
+        data = request.get_json(silent=True)
+        if not data or not isinstance(data, dict):
+            return jsonify({'error': 'Invalid JSON body'}), 400
+        required_fields = ['brightness', 'timeout', 'lightMode', 'colors', 'language']
+        if not all(k in data for k in required_fields):
+            return jsonify({'error': 'Missing required fields'}), 400
+        try:
+            db.update_settings(data)  # Update settings in the database
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'error': f'Failed to update settings: {e}'}), 400
 
 
 @app.route('/api/esp/', methods=['GET', 'POST'])
@@ -243,8 +263,8 @@ def esps():
 
     elif request.method == 'POST':
         try:
-            esp_data = request.get_json()
-            if not esp_data:
+            esp_data = request.get_json(silent=True)
+            if not esp_data or not isinstance(esp_data, dict):
                 return jsonify({"error": "No data provided"}), 400
 
             id = db.write_esp_settings(esp_data)
@@ -287,8 +307,8 @@ def items():
         items = db.read_items()
         return jsonify(items)
     elif request.method == 'POST':
-        item = request.get_json()
-        if not item or not str(item.get('name', '')).strip():
+        item = request.get_json(silent=True)
+        if not item or not isinstance(item, dict) or not str(item.get('name', '')).strip():
             return jsonify({'error': 'Name required'}), 400
         id = db.write_item(item)
         item['id'] = id
