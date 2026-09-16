@@ -569,7 +569,9 @@ def position_optimization(positions, esp):
 @app.route('/test_lights', methods=['POST'])
 def test_lights():
     set_global_settings()
-    lights_list = request.get_json()
+    lights_list = request.get_json(silent=True)
+    if not lights_list or not isinstance(lights_list, dict):
+        return {'error': 'Invalid payload'}, 400
     for ip, positions in lights_list.items():
         # Validate positions list
         if not positions or not all(isinstance(pos, int) for pos in positions):

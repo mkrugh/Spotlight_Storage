@@ -77,3 +77,51 @@ class TestDbBuilds:
         # Quantity should be clamped to 0
         updated_item = db.get_item(item_id)
         assert updated_item['quantity'] == 0
+
+    def test_delete_item_cascades_build_items(self, isolated_db):
+        """Verify deleting an item automatically removes its reference from build_items."""
+        item1_id = db.write_item({'name': 'Resistor', 'quantity': 100})
+        item2_id = db.write_item({'name': 'Capacitor', 'quantity': 50})
+        build_id = db.write_build('Filter Circuit')
+
+        db.set_build_items(build_id, [
+            {'item_id': item1_id, 'quantity_needed': 2},
+            {'item_id': item2_id, 'quantity_needed': 1},
+        ])
+        assert len(db.get_build_items(build_id)) == 2
+
+        # Delete resistor item
+        db.delete_item(item1_id)
+
+        # Build items should now only contain capacitor
+        remaining = db.get_build_items(build_id)
+        assert len(remaining) == 1
+        assert remaining[0]['item_id'] == item2_id
+
+    def test_rapid_consecutive_build_executions(self, isolated_db):
+        """Verify executing a build multiple times continuously decrements stock accurately."""
+        item_id = db.write_item({'name': 'LED', 'quantity': 15})
+        build_id = db.write_build('Blinky')
+        db.set_build_items(build_id, [{'item_id': item_id, 'quantity_needed': 5}])
+
+        # First run: 15 -> 10
+        w1 = db.execute_build(build_id)
+        assert w1 == []
+        assert db.get_item(item_id)['quantity'] == 10
+
+        # Second run: 10 -> 5
+        w2 = db.execute_build(build_id)
+        assert w2 == []
+        assert db.get_item(item_id)['quantity'] == 5
+
+        # Third run: 5 -> 0
+        w3 = db.execute_build(build_id)
+        assert w3 == []
+        assert db.get_item(item_id)['quantity'] == 0
+
+        # Fourth run: 0 -> 0 with warning
+        w4 = db.execute_build(build_id)
+        assert len(w4) == 1
+        assert w4[0]['have'] == 0
+        assert w4[0]['need'] == 5
+        assert db.get_item(item_id)['quantity'] == 0

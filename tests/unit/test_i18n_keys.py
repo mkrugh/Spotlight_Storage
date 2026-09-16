@@ -29,3 +29,20 @@ class TestI18nKeys:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             assert isinstance(data, dict), f"{file_name} must contain a JSON object"
+
+    def test_all_translation_keys_match_en(self):
+        """Verify that every language file contains all keys defined in en.json."""
+        en_path = os.path.join(TRANSLATIONS_DIR, 'en.json')
+        with open(en_path, 'r', encoding='utf-8') as f:
+            en_keys = set(json.load(f).keys())
+
+        translation_files = [f for f in os.listdir(TRANSLATIONS_DIR) if f.endswith('.json') and f != 'en.json']
+        for file_name in translation_files:
+            file_path = os.path.join(TRANSLATIONS_DIR, file_name)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lang_keys = set(json.load(f).keys())
+
+            missing = en_keys - lang_keys
+            extra = lang_keys - en_keys
+            assert not missing, f"{file_name} is missing keys: {missing}"
+            assert not extra, f"{file_name} has extra unexpected keys: {extra}"

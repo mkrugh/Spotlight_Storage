@@ -174,6 +174,7 @@ def get_item(id):
 
 def delete_item(id):
     conn = create_combined_db()
+    conn.execute('DELETE FROM build_items WHERE item_id = ?', [id])
     conn.execute('DELETE FROM items WHERE id = ?', [id])
     conn.commit()
     conn.close()
