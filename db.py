@@ -5,13 +5,14 @@ import sqlite3
 from collections import Counter
 
 # Define the path for the combined database
-COMBINED_DATABASE = 'data/combined_data.db'
+COMBINED_DATABASE = os.getenv('COMBINED_DATABASE', 'data/combined_data.db')
 
 
 def create_combined_db():
-    # Ensure the 'data' directory exists
-    if not os.path.exists(os.path.dirname(COMBINED_DATABASE)):
-        os.makedirs(os.path.dirname(COMBINED_DATABASE))  # Connect to the combined database
+    # Ensure the database directory exists if specified
+    db_dir = os.path.dirname(COMBINED_DATABASE)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir)  # Connect to the combined database
 
     conn_combined = sqlite3.connect(COMBINED_DATABASE)
     conn_combined.row_factory = sqlite3.Row

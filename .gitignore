@@ -200,3 +200,6 @@ $RECYCLE.BIN/
 *.sqlite
 *.jpg
 *.webp
+
+# Active Run directory
+Active_Run/
