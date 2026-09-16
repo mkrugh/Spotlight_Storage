@@ -13,13 +13,30 @@ class TestApiEndpointsMisc:
     """
 
     def test_get_index_page(self, client):
-        """Verify root page / returns 200 OK and renders index HTML with sorting controls."""
+        """Verify root page / returns 200 OK and renders index HTML with sorting controls and updated links."""
         response = client.get('/')
         assert response.status_code == 200
-        assert b'<html' in response.data.lower()
-        assert b'id="sort-dir-asc"' in response.data
-        assert b'id="sort-dir-desc"' in response.data
-        assert b'id="sort_method"' in response.data
+        html = response.data.decode('utf-8')
+        assert '<html' in html.lower()
+
+        # Sorting controls
+        assert 'id="sort-dir-asc"' in html
+        assert 'id="sort-dir-desc"' in html
+        assert 'id="sort_method"' in html
+
+        # New UI elements
+        assert 'id="settings_btn_tooltip"' in html
+        assert 'id="test-esp-btn"' in html
+        assert 'id="open-map-btn"' in html
+
+        # Updated repository & issues links
+        assert 'https://github.com/mkrugh/Spotlight_Storage' in html
+        assert 'https://github.com/mkrugh/Spotlight_Storage/issues' in html
+
+        # Deprecated links removed
+        assert 'paypal.com' not in html
+        assert 'patreon.com' not in html
+        assert 'discord.gg' not in html
 
     def test_get_favicon(self, client):
         """Verify /favicon.ico serves the favicon with correct MIME type."""

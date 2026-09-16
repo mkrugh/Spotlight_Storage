@@ -11,6 +11,7 @@ class TestRequirementsAndBuildSanity:
 
     def test_core_modules_importable(self):
         """Verify core modules and dependencies import cleanly without syntax or version errors."""
+        import importlib.metadata
         import flask
         import requests
         import werkzeug
@@ -19,9 +20,9 @@ class TestRequirementsAndBuildSanity:
         import app
         import db
 
-        assert flask.__version__ is not None
-        assert requests.__version__ is not None
-        assert waitress.__version__ is not None
+        assert importlib.metadata.version("flask") is not None
+        assert importlib.metadata.version("requests") is not None
+        assert importlib.metadata.version("waitress") is not None
 
     def test_dockerfile_exists_and_configured(self):
         dockerfile_path = os.path.join(PROJECT_ROOT, 'Dockerfile')
