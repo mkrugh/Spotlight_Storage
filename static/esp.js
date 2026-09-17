@@ -601,23 +601,27 @@ let filterESP = [];
 
 // Sort items based on the selected ESP filters
 function sortItemsByESP(filter, filter2 = "") {
-
     const itemsContainer = document.getElementById('items-container-grid');
     if (!itemsContainer) return;
-    const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
     filterESP = [];
     if (filter !== "") filterESP.push(filter);
     if (filter2 !== "") filterESP.push(filter2);
     toggleSelectedESP();
-    let visibleCount = 0;
-    items.forEach(item => {
-        const itemESP = (item.dataset.ip || '').toLowerCase();
-        const shouldDisplay = filterESP.length === 0 || filterESP.some(searchText => itemESP.includes(searchText.toLowerCase()));
-        item.style.display = shouldDisplay ? "flex" : "none";
-        if (shouldDisplay) visibleCount++;
-    });
-    if (typeof updateEmptyState === 'function') {
-        updateEmptyState(visibleCount, items.length);
+
+    if (typeof applyItemFilters === 'function') {
+        applyItemFilters();
+    } else {
+        const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
+        let visibleCount = 0;
+        items.forEach(item => {
+            const itemESP = (item.dataset.ip || '').toLowerCase();
+            const shouldDisplay = filterESP.length === 0 || filterESP.some(searchText => itemESP.includes(searchText.toLowerCase()));
+            item.style.display = shouldDisplay ? "flex" : "none";
+            if (shouldDisplay) visibleCount++;
+        });
+        if (typeof updateEmptyState === 'function') {
+            updateEmptyState(visibleCount, items.length);
+        }
     }
 }
 
@@ -657,6 +661,7 @@ function populateESPMenu(espDataArray) {
         espDataArray.forEach(({ name, esp_ip }) => {
             espTabs.appendChild(createESPTab(name, () => sortItemsByESP(name, esp_ip), esp_ip));
         });
+        toggleSelectedESP();
     } else {
         espTabs.parentElement.style.display = 'none'; // Hide the tab view container
     }

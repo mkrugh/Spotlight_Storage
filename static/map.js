@@ -1,16 +1,30 @@
 let mapModal = null;
 let mapModalVisible = false;
 let currentMapEsp = null;
+let currentSelectedLed = null;
 
 document.addEventListener('DOMContentLoaded', function () {
-    mapModal = new bootstrap.Modal(document.getElementById('map-modal'));
-
     const modalEl = document.getElementById('map-modal');
-    modalEl.addEventListener('shown.bs.modal', () => { mapModalVisible = true; });
-    modalEl.addEventListener('hidden.bs.modal', () => { mapModalVisible = false; });
+    if (modalEl) {
+        mapModal = new bootstrap.Modal(modalEl);
+        modalEl.addEventListener('shown.bs.modal', () => { mapModalVisible = true; });
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            mapModalVisible = false;
+            currentSelectedLed = null;
+        });
+    }
 });
 
-document.getElementById('open-map-btn').addEventListener('click', openMapModal);
+document.getElementById('open-map-btn')?.addEventListener('click', openMapModal);
+
+function isItemLowStock(item) {
+    if (!item) return false;
+    const qty = parseInt(item.quantity, 10) || 0;
+    const minQty = (item.min_quantity !== undefined && item.min_quantity !== null && item.min_quantity !== '' && !isNaN(parseInt(item.min_quantity, 10)))
+        ? parseInt(item.min_quantity, 10)
+        : 3;
+    return qty <= minQty;
+}
 
 async function openMapModal() {
     // Refresh ESPs if empty
@@ -38,18 +52,60 @@ async function openMapModal() {
         console.error('Error refreshing items for map:', e);
     }
 
-    // Use currently active ESP filter if set, otherwise single ESP or picker
+    // Determine initial ESP based on active WLED tab or filter
     let esp = null;
-    if (typeof filterESP !== 'undefined' && filterESP.length > 0) {
-        esp = ESPs.find(e =>
-            filterESP.some(f =>
-                f.toLowerCase() === e.name.toLowerCase() ||
-                f.toLowerCase() === e.esp_ip.toLowerCase()
-            )
-        );
+    let activeFilter = null;
+    if (typeof getActiveEspTab === 'function') {
+        activeFilter = getActiveEspTab();
+    } else if (typeof filterESP !== 'undefined' && filterESP.length > 0) {
+        activeFilter = filterESP;
     }
-    if (!esp && ESPs.length === 1) {
+
+    if (activeFilter) {
+        const filterTargets = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
+        const cleanTargets = filterTargets
+            .map(t => (t !== undefined && t !== null) ? String(t).trim().toLowerCase() : '')
+            .filter(t => t.length > 0 && t !== 'all boxes');
+
+        if (cleanTargets.length > 0) {
+            esp = ESPs.find(e =>
+                cleanTargets.some(target =>
+                    target === String(e.id).toLowerCase() ||
+                    target === (e.name || '').trim().toLowerCase() ||
+                    target === (e.esp_ip || '').trim().toLowerCase()
+                )
+            );
+        }
+    }
+
+    // If no active ESP filter matched (or "All Boxes" is active), default to the first ESP
+    if (!esp && ESPs.length > 0) {
         esp = ESPs[0];
+    }
+
+    // Populate the dropdown in modal header
+    const selectEl = document.getElementById('map-esp-select');
+    const selectWrapper = document.getElementById('map-esp-select-wrapper');
+    if (selectEl) {
+        selectEl.innerHTML = ESPs.map(e => `
+            <option value="${e.id}">${escapeHtml(e.name || 'Cabinet ' + e.id)} (${escapeHtml(e.esp_ip || '')})</option>
+        `).join('');
+
+        if (esp) {
+            selectEl.value = esp.id;
+        }
+
+        selectEl.onchange = function () {
+            const selectedId = this.value;
+            const chosen = ESPs.find(e => String(e.id) === String(selectedId));
+            if (chosen) {
+                showMapForEsp(chosen);
+            }
+        };
+    }
+
+    if (selectWrapper) {
+        selectWrapper.style.display = ESPs.length > 1 ? 'flex' : 'none';
     }
 
     if (esp) {
@@ -73,28 +129,290 @@ function showEspPicker() {
 
 function showMapForEsp(esp) {
     currentMapEsp = esp;
-    document.getElementById('map-modal-title').textContent = `Map \u2013 ${esp.name}`;
-    document.getElementById('map-esp-picker').classList.add('d-none');
-    document.getElementById('map-canvas-container').classList.remove('d-none');
-    document.getElementById('map-side-panel').classList.remove('d-none');
+    currentSelectedLed = null;
+
+    const titleEl = document.getElementById('map-modal-title');
+    if (titleEl) titleEl.textContent = 'Map';
+
+    const selectEl = document.getElementById('map-esp-select');
+    if (selectEl && String(selectEl.value) !== String(esp.id)) {
+        selectEl.value = esp.id;
+    }
+
+    const container = document.getElementById('map-canvas-container');
+    if (container) {
+        container.style.overflowX = 'auto';
+        container.style.overflowY = 'auto';
+    }
+
+    document.getElementById('map-esp-picker')?.classList.add('d-none');
+    container?.classList.remove('d-none');
+    document.getElementById('map-side-panel')?.classList.remove('d-none');
     resetMapPanel();
 
     if (!mapModalVisible) {
         document.getElementById('map-modal').addEventListener('shown.bs.modal', function handler() {
-            drawMapCanvas(esp);
+            renderMapGrid(esp);
+            if (window.lucide && lucide.createIcons) lucide.createIcons();
             document.getElementById('map-modal').removeEventListener('shown.bs.modal', handler);
         });
         mapModal.show();
     } else {
-        setTimeout(() => drawMapCanvas(esp), 50);
+        renderMapGrid(esp);
+        if (window.lucide && lucide.createIcons) lucide.createIcons();
     }
 }
 
 function resetMapPanel() {
-    document.getElementById('map-items-heading').textContent = '';
-    document.getElementById('map-items-list').innerHTML =
-        '<p class="text-muted small">Click an LED position to see which items are stored there.</p>';
+    currentSelectedLed = null;
+    const inspector = document.getElementById('map-inspector-content');
+    if (inspector) {
+        inspector.innerHTML = `
+            <div class="p-3 rounded border text-muted small text-center bg-body-tertiary">
+                Click any drawer position on the map to inspect stored parts.
+            </div>
+        `;
+    }
+    const heading = document.getElementById('map-items-heading');
+    if (heading) heading.textContent = '';
+    const list = document.getElementById('map-items-list');
+    if (list) {
+        list.innerHTML = '<p class="text-muted small">Click any drawer position on the map to inspect stored parts.</p>';
+    }
 }
+
+function renderMapGrid(esp) {
+    const container = document.getElementById('map-drawer-grid-view');
+    if (!container) return;
+
+    const occupancy = buildOccupancyMap(esp);
+    const isMulti = esp.sections && Array.isArray(esp.sections) && esp.sections.length > 0;
+
+    let totalDrawers = 0;
+    let gridHtml = '';
+
+    if (isMulti) {
+        const normalizedSections = esp.sections.map(s => ({
+            name: s.name || '',
+            rows: Math.max(1, parseInt(s.rows, 10) || 1),
+            cols: Math.max(1, parseInt(s.cols, 10) || 1),
+            start_left: String(s.start_left || 'left').toLowerCase() === '1' ? 'right' : String(s.start_left || 'left').toLowerCase(),
+            start_top: String(s.start_top || 'top').toLowerCase(),
+            serpentine_direction: String(s.serpentine_direction || 'horizontal').toLowerCase() === '1' ? 'vertical' : String(s.serpentine_direction || 'horizontal').toLowerCase()
+        }));
+
+        totalDrawers = normalizedSections.reduce((sum, s) => sum + s.rows * s.cols, 0);
+        let cumLedOffset = 0;
+
+        gridHtml = normalizedSections.map((s, secIdx) => {
+            let sectionCellsHtml = '';
+            for (let r = 0; r < s.rows; r++) {
+                for (let c = 0; c < s.cols; c++) {
+                    const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                    const ledNum = cumLedOffset + localLed;
+                    const items = occupancy[ledNum] || [];
+                    const isSelected = currentSelectedLed === ledNum;
+                    sectionCellsHtml += createDrawerCardHtml(ledNum, items, isSelected);
+                }
+            }
+            cumLedOffset += s.rows * s.cols;
+
+            const headerHtml = normalizedSections.length > 1
+                ? `<div class="d-flex align-items-center justify-content-between mb-2 mt-3 text-muted small fw-bold">
+                       <span>${escapeHtml(s.name || `Section ${secIdx + 1}`)}</span>
+                       <span>${s.cols} cols × ${s.rows} rows</span>
+                   </div>`
+                : '';
+
+            return `
+                ${headerHtml}
+                <div class="map-drawer-grid mb-3" style="grid-template-columns: repeat(${s.cols}, minmax(0, 1fr));">
+                    ${sectionCellsHtml}
+                </div>
+            `;
+        }).join('');
+
+    } else {
+        const rows = Math.max(1, parseInt(esp.rows, 10) || 1);
+        const columns = Math.max(1, parseInt(esp.cols, 10) || 1);
+        let startX = String(esp.start_left || 'left').toLowerCase();
+        let startY = String(esp.start_top || 'top').toLowerCase();
+        let serpDir = String(esp.serpentine_direction || 'horizontal').toLowerCase();
+        if (startX === '1') startX = 'right';
+        if (serpDir === '1') serpDir = 'vertical';
+
+        totalDrawers = rows * columns;
+        let cellsHtml = '';
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < columns; c++) {
+                const ledNum = calculateLedNumber(r, c, startX, startY, serpDir, rows, columns);
+                const items = occupancy[ledNum] || [];
+                const isSelected = currentSelectedLed === ledNum;
+                cellsHtml += createDrawerCardHtml(ledNum, items, isSelected);
+            }
+        }
+
+        gridHtml = `
+            <div class="map-drawer-grid" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">
+                ${cellsHtml}
+            </div>
+        `;
+    }
+
+    container.innerHTML = gridHtml;
+
+    // Calculate live occupancy stats
+    let occupiedCount = 0;
+    for (let i = 1; i <= totalDrawers; i++) {
+        if (occupancy[i] && occupancy[i].length > 0) {
+            occupiedCount++;
+        }
+    }
+    const pct = totalDrawers > 0 ? Math.round((occupiedCount / totalDrawers) * 100) : 0;
+    const occTextEl = document.getElementById('map-occupancy-text');
+    if (occTextEl) {
+        occTextEl.textContent = `${occupiedCount} / ${totalDrawers} drawers occupied (${pct}%)`;
+    }
+}
+
+function createDrawerCardHtml(ledNum, items, isSelected) {
+    const isEmpty = !items || items.length === 0;
+    const paddedNum = String(ledNum).padStart(2, '0');
+
+    if (isEmpty) {
+        return `
+            <div class="map-drawer-card map-drawer-empty ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}" onclick="selectDrawer(${ledNum})">
+                <div class="drawer-bin-num">#${paddedNum}</div>
+                <div class="text-center small font-italic opacity-75 my-auto text-truncate" style="font-size:0.72rem;">Empty</div>
+                <div style="height: 6px;"></div>
+            </div>
+        `;
+    }
+
+    const primary = items[0];
+    const extraCount = items.length - 1;
+    const isLow = items.some(it => isItemLowStock(it));
+    const qty = parseInt(primary.quantity, 10) || 0;
+
+    return `
+        <div class="map-drawer-card ${isLow ? 'map-drawer-low' : 'map-drawer-occupied'} ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}" onclick="selectDrawer(${ledNum})">
+            <div class="d-flex align-items-center justify-content-between overflow-hidden text-nowrap" style="min-width:0;">
+                <span class="drawer-bin-num flex-shrink-0">#${paddedNum}</span>
+                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                    ${extraCount > 0 ? `<span class="drawer-tag-extra">+${extraCount}</span>` : ''}
+                    ${isLow ? `<span class="drawer-tag-low">Low</span>` : ''}
+                </div>
+            </div>
+            <div class="drawer-title-clamp" title="${escapeHtml(primary.name || '')}">
+                ${escapeHtml(primary.name || '')}
+            </div>
+            <div class="d-flex align-items-center justify-content-between pt-1 overflow-hidden" style="min-width:0;">
+                <span class="text-muted fw-semibold flex-shrink-0" style="font-size:0.65rem;">Qty:</span>
+                <span class="${isLow ? 'drawer-qty-pill-low' : 'drawer-qty-pill-occ'} text-truncate" style="max-width:55px;">
+                    ${qty}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+function selectDrawer(ledNum) {
+    currentSelectedLed = ledNum;
+
+    // Update selection styling on cards
+    const allCards = document.querySelectorAll('#map-drawer-grid-view .map-drawer-card');
+    allCards.forEach(c => {
+        if (parseInt(c.dataset.led, 10) === ledNum) {
+            c.classList.add('drawer-selected');
+        } else {
+            c.classList.remove('drawer-selected');
+        }
+    });
+
+    if (!currentMapEsp) return;
+    const occupancy = buildOccupancyMap(currentMapEsp);
+    const items = occupancy[ledNum] || [];
+
+    renderDrawerInspector(ledNum, items, currentMapEsp);
+    renderMapItems(ledNum, items);
+}
+
+function renderDrawerInspector(ledNum, items, esp) {
+    const container = document.getElementById('map-inspector-content');
+    if (!container) return;
+
+    if (!ledNum) {
+        container.innerHTML = `
+            <div class="p-3 rounded border text-muted small text-center bg-body-tertiary">
+                Click any drawer position on the map to inspect stored parts.
+            </div>
+        `;
+        return;
+    }
+
+    if (!items || items.length === 0) {
+        container.innerHTML = `
+            <div class="map-inspector-card">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="fw-bold">Drawer #${ledNum}</span>
+                    <span class="badge bg-secondary-subtle text-secondary border">Empty Bin</span>
+                </div>
+                <p class="text-muted small mb-0">This drawer position is currently unassigned and available for storage.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const isLow = items.some(it => isItemLowStock(it));
+
+    container.innerHTML = `
+        <div class="map-inspector-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div>
+                    <div class="fw-bold">Drawer #${ledNum}</div>
+                    <div class="small text-muted">${escapeHtml(esp.name || '')}</div>
+                </div>
+                <span class="badge ${isLow ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-warning-subtle text-warning border border-warning-subtle'} px-2 py-1 fw-bold text-uppercase" style="font-size:0.68rem;">
+                    ${isLow ? '⚠ Low Stock' : 'Occupied'}
+                </span>
+            </div>
+
+            <div class="d-flex flex-column gap-2 pt-2 border-top">
+                ${items.map(item => {
+                    const itemLow = isItemLowStock(item);
+                    return `
+                        <div class="map-inspector-item-card">
+                            <div class="d-flex align-items-start gap-2">
+                                ${item.image
+                                    ? `<img src="${safeUrl(item.image)}" style="width:38px;height:38px;object-fit:cover;flex-shrink:0;" class="rounded border" alt="${escapeHtml(item.name || '')}">`
+                                    : `<div style="width:38px;height:38px;flex-shrink:0;" class="rounded border bg-secondary-subtle d-flex align-items-center justify-content-center text-muted"><i data-lucide="package" class="icon-n4px"></i></div>`
+                                }
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="fw-bold small text-truncate" title="${escapeHtml(item.name || '')}">${escapeHtml(item.name || '')}</div>
+                                    <div class="d-flex align-items-center justify-content-between small mt-1">
+                                        <span class="text-muted">Stock:</span>
+                                        <span class="fw-bold ${itemLow ? 'text-danger' : 'text-warning-emphasis'}">${parseInt(item.quantity, 10) || 0} pcs</span>
+                                    </div>
+                                    ${item.min_quantity !== undefined && item.min_quantity !== null && item.min_quantity !== ''
+                                        ? `<div class="d-flex align-items-center justify-content-between text-muted" style="font-size:0.72rem;"><span>Alert threshold:</span><span>≤ ${item.min_quantity}</span></div>`
+                                        : ''}
+                                    ${item.link
+                                        ? `<div class="mt-1"><a href="${safeUrl(item.link)}" target="_blank" rel="noopener noreferrer" class="small text-primary text-decoration-none">Supplier link ↗</a></div>`
+                                        : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+
+    if (window.lucide && lucide.createIcons) {
+        lucide.createIcons({ root: container });
+    }
+}
+
 
 function drawMapCanvas(esp) {
     if (esp.sections && Array.isArray(esp.sections) && esp.sections.length > 0) {
@@ -119,10 +437,8 @@ function drawMapCanvas(esp) {
     if (boxSize <= 60) {
         boxSize = 60;
         canvas.width = boxSize * columns + lw;
-        container.style.overflowX = 'scroll';
     } else {
         canvas.width = containerWidth;
-        container.style.overflowX = 'hidden';
     }
     canvas.height = boxSize * rows + lw;
 
@@ -196,10 +512,8 @@ function drawMultiSectionMap(esp) {
     if ((containerWidth - lw) / maxCols < 50) {
         boxHeight = 50;
         canvas.width = 50 * maxCols + lw;
-        container.style.overflowX = 'scroll';
     } else {
         canvas.width = containerWidth;
-        container.style.overflowX = 'hidden';
     }
     canvas.height = boxHeight * totalRows + lw;
 
@@ -292,8 +606,7 @@ function handleMultiSectionMapClick(event, esp, sections, boxHeight, lw) {
             const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
             const ledNum = cumLedOffset + localLed;
 
-            const occupancy = buildOccupancyMap(esp);
-            renderMapItems(ledNum, occupancy[ledNum] || []);
+            selectDrawer(ledNum);
             return;
         }
         currentSecY += secHeight;
@@ -331,10 +644,12 @@ function buildOccupancyMap(esp) {
 }
 
 function itemBelongsToEsp(item, esp) {
+    if (!item || !esp) return false;
     const ip = (item.ip || '').trim().toLowerCase();
     const espName = (esp.name || '').trim().toLowerCase();
     const espIp = (esp.esp_ip || '').trim().toLowerCase();
-    return ip === espName || ip === espIp;
+    const espId = String(esp.id !== undefined && esp.id !== null ? esp.id : '').trim().toLowerCase();
+    return ip === espName || ip === espIp || (espId.length > 0 && ip === espId);
 }
 
 function handleMapClick(event, esp, boxSize, lw, startX, startY, serpDir) {
@@ -345,8 +660,7 @@ function handleMapClick(event, esp, boxSize, lw, startX, startY, serpDir) {
     const row = Math.floor(y / boxSize);
     const col = Math.floor(x / boxSize);
     const ledNum = calculateLedNumber(row, col, startX, startY, serpDir, parseInt(esp.rows), parseInt(esp.cols));
-    const occupancy = buildOccupancyMap(esp);
-    renderMapItems(ledNum, occupancy[ledNum] || []);
+    selectDrawer(ledNum);
 }
 
 function renderMapItems(ledNum, items) {

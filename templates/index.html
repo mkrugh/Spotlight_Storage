@@ -24,7 +24,8 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarCollapse">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0 d-flex flex-row align-items-center flex-nowrap">
+            <!-- 1. Action Group (Add, Builds, Map) -->
+            <ul class="navbar-nav navbar-action-group mb-2 mb-lg-0 d-flex flex-row align-items-center flex-nowrap gap-2">
                 <li class="nav-item">
                     <button type="button" class="btn btn-outline-success pe-3 text-nowrap d-inline-flex align-items-center" data-bs-toggle="modal" data-bs-target="#item-modal">
                         <span class="icon-n4px me-1">
@@ -33,7 +34,7 @@
                         <span id="add_item">Add Item</span>
                     </button>
                 </li>
-                <li class="nav-item ms-2">
+                <li class="nav-item">
                     <button type="button" class="btn btn-outline-warning pe-3 text-nowrap d-inline-flex align-items-center" id="open-builds-btn">
                         <span class="icon-n4px me-1">
                             <i data-lucide="hammer"></i>
@@ -41,7 +42,7 @@
                         <span id="builds_btn_label">Builds</span>
                     </button>
                 </li>
-                <li class="nav-item ms-2">
+                <li class="nav-item">
                     <button type="button" class="btn btn-outline-info pe-3 text-nowrap d-inline-flex align-items-center" id="open-map-btn">
                         <span class="icon-n4px me-1">
                             <i data-lucide="map-pin"></i>
@@ -51,50 +52,51 @@
                 </li>
             </ul>
 
-            <div class="d-flex align-items-center flex-wrap flex-lg-nowrap gap-2 ms-lg-auto mt-2 mt-lg-0">
-                <div class="d-flex align-items-center search-input-wrapper">
-                    <input type="text" class="form-control flex-grow-1" placeholder="Search items... (/)" id="search" autocomplete="off">
-                    <button type="button" id="search-clear-btn" class="search-clear-btn" title="Clear search" aria-label="Clear search">&times;</button>
-                    <i data-lucide="search" class="search-icon-nav"></i>
+            <!-- 2. Search Group (Placed between actions and tools on desktop, full-width below on mobile) -->
+            <div class="navbar-search-group d-flex align-items-center search-input-wrapper mt-2 mt-lg-0">
+                <input type="text" class="form-control flex-grow-1" placeholder="Search items... (/)" id="search" autocomplete="off">
+                <button type="button" id="search-clear-btn" class="search-clear-btn" title="Clear search" aria-label="Clear search">&times;</button>
+                <i data-lucide="search" class="search-icon-nav"></i>
+            </div>
+
+            <!-- 3. Tools Group (Sorts and Settings: right of search on desktop, right of add/build/map on mobile) -->
+            <div class="navbar-tools-group d-flex align-items-center gap-2 flex-shrink-0">
+                <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingMethods_text" title="Sorting methods">
+                    <button class="btn btn-outline-secondary dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        <i data-lucide="arrow-down-up"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="sort_method">
+                        <li class="px-2 py-1">
+                            <div class="btn-group w-100 btn-group-sm" role="group" aria-label="Sort direction">
+                                <button type="button" class="btn btn-outline-primary active" id="sort-dir-asc" onclick="setSortDirection('asc', event)">
+                                    <i data-lucide="arrow-up" class="me-1"></i><span id="sortAsc_text">Asc</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="sort-dir-desc" onclick="setSortDirection('desc', event)">
+                                    <i data-lucide="arrow-down" class="me-1"></i><span id="sortDesc_text">Desc</span>
+                                </button>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li><a id="sortBybox" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('ip', event)"><span class="d-flex align-items-center"><i data-lucide="box" class="me-2"></i><span class="sort-label">Box</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortByid" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('id', event)"><span class="d-flex align-items-center"><i data-lucide="hash" class="me-2"></i><span class="sort-label">ID</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortByname" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('name', event)"><span class="d-flex align-items-center"><i data-lucide="type" class="me-2"></i><span class="sort-label">Name</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortByquantity" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('quantity', event)"><span class="d-flex align-items-center"><i data-lucide="boxes" class="me-2"></i><span class="sort-label">Quantity</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortBylocation" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('position', event)"><span class="d-flex align-items-center"><i data-lucide="map-pin" class="me-2"></i><span class="sort-label">Location</span></span><span class="sort-indicator ms-2"></span></a></li>
+                    </ul>
                 </div>
 
-                <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                    <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingMethods_text" title="Sorting methods">
-                        <button class="btn btn-outline-secondary dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                            <i data-lucide="arrow-down-up"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end" id="sort_method">
-                            <li class="px-2 py-1">
-                                <div class="btn-group w-100 btn-group-sm" role="group" aria-label="Sort direction">
-                                    <button type="button" class="btn btn-outline-primary active" id="sort-dir-asc" onclick="setSortDirection('asc', event)">
-                                        <i data-lucide="arrow-up" class="me-1"></i><span id="sortAsc_text">Asc</span>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-primary" id="sort-dir-desc" onclick="setSortDirection('desc', event)">
-                                        <i data-lucide="arrow-down" class="me-1"></i><span id="sortDesc_text">Desc</span>
-                                    </button>
-                                </div>
-                            </li>
-                            <li><hr class="dropdown-divider my-1"></li>
-                            <li><a id="sortBybox" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('ip', event)"><span class="d-flex align-items-center"><i data-lucide="box" class="me-2"></i><span class="sort-label">Box</span></span><span class="sort-indicator ms-2"></span></a></li>
-                            <li><a id="sortByid" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('id', event)"><span class="d-flex align-items-center"><i data-lucide="hash" class="me-2"></i><span class="sort-label">ID</span></span><span class="sort-indicator ms-2"></span></a></li>
-                            <li><a id="sortByname" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('name', event)"><span class="d-flex align-items-center"><i data-lucide="type" class="me-2"></i><span class="sort-label">Name</span></span><span class="sort-indicator ms-2"></span></a></li>
-                            <li><a id="sortByquantity" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('quantity', event)"><span class="d-flex align-items-center"><i data-lucide="boxes" class="me-2"></i><span class="sort-label">Quantity</span></span><span class="sort-indicator ms-2"></span></a></li>
-                            <li><a id="sortBylocation" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('position', event)"><span class="d-flex align-items-center"><i data-lucide="map-pin" class="me-2"></i><span class="sort-label">Location</span></span><span class="sort-indicator ms-2"></span></a></li>
-                        </ul>
-                    </div>
-                    <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingBytags_text" title="Sorting by Tags">
-                        <button class="btn btn-outline-secondary dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                            <i data-lucide="filter"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end" id="sort_tags">
-                        </ul>
-                    </div>
+                <div class="dropdown" data-bs-toggle="tooltip" data-bs-trigger="hover" id="sortingBytags_text" title="Sorting by Tags">
+                    <button class="btn btn-outline-secondary dropdown-toggle icon-n6px" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        <i data-lucide="filter"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="sort_tags">
+                    </ul>
+                </div>
 
-                    <div data-bs-toggle="tooltip" data-bs-trigger="hover" id="settings_btn_tooltip" title="Settings">
-                        <button class="btn btn-outline-secondary icon-n6px" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSettings" aria-controls="offcanvasExample">
-                            <i data-lucide="settings"></i>
-                        </button>
-                    </div>
+                <div data-bs-toggle="tooltip" data-bs-trigger="hover" id="settings_btn_tooltip" title="Settings">
+                    <button class="btn btn-outline-secondary icon-n6px" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSettings" aria-controls="offcanvasExample">
+                        <i data-lucide="settings"></i>
+                    </button>
                 </div>
             </div>
 
@@ -674,22 +676,81 @@
     <div class="modal fade" id="map-modal" tabindex="-1" aria-labelledby="map-modal-title" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="map-modal-title">Map</h5>
+                <div class="modal-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="p-1 rounded bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center">
+                                <i data-lucide="map-pin" class="icon-n4px"></i>
+                            </span>
+                            <h5 class="modal-title mb-0" id="map-modal-title">Map</h5>
+                        </div>
+
+                        <div class="vr d-none d-sm-block my-1"></div>
+
+                        <!-- Cabinet Selector Dropdown -->
+                        <div class="d-flex align-items-center gap-2" id="map-esp-select-wrapper">
+                            <label for="map-esp-select" class="small text-muted fw-semibold mb-0">Cabinet:</label>
+                            <select id="map-esp-select" class="form-select form-select-sm fw-semibold" style="width: auto; min-width: 170px;">
+                            </select>
+                        </div>
+
+                        <!-- Live Occupancy Badge (High contrast neutral badge) -->
+                        <span id="map-occupancy-badge" class="map-occupancy-pill badge px-3 py-1.5 rounded-pill d-inline-flex align-items-center gap-2 fw-bold text-nowrap">
+                            <span class="map-occupancy-dot rounded-circle d-inline-block"></span>
+                            <span id="map-occupancy-text">0 / 0 drawers occupied (0%)</span>
+                        </span>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div id="map-esp-picker" class="d-none mb-3"></div>
-                    <div class="d-flex gap-3 map-modal-layout" style="min-height:360px;">
-                        <div id="map-canvas-container" class="position-relative" style="flex:1; overflow:auto;">
-                            <canvas id="map-responsive-canvas"></canvas>
+                    <div class="d-flex gap-3 map-modal-layout" style="min-height:420px;">
+                        <div id="map-canvas-container" class="position-relative d-flex flex-column justify-content-between" style="flex:1; overflow:auto;">
+                            <!-- Responsive Drawer Cards Container -->
+                            <div id="map-drawer-grid-view"></div>
+
+                            <!-- Keep canvas & highlight elements hidden for backward compatibility -->
+                            <canvas id="map-responsive-canvas" class="d-none"></canvas>
                             <div id="map-cell-highlight" class="matrix-cell-highlight d-none"></div>
                             <div id="map-cell-tooltip" class="matrix-cell-tooltip d-none"></div>
+
+                            <!-- Accessible Legend Bar -->
+                            <div class="map-legend-bar d-flex flex-wrap align-items-center mt-3 pt-2 border-top small text-muted">
+                                <span class="map-legend-item">
+                                    <span class="map-legend-swatch map-legend-occ"></span>
+                                    <span>Occupied Drawer</span>
+                                </span>
+                                <span class="map-legend-item">
+                                    <span class="map-legend-swatch map-legend-low"></span>
+                                    <span>Low Stock Alert</span>
+                                </span>
+                                <span class="map-legend-item">
+                                    <span class="map-legend-swatch map-legend-empty"></span>
+                                    <span>Empty Drawer</span>
+                                </span>
+                                <span class="map-legend-item">
+                                    <span class="map-legend-swatch map-legend-sel"></span>
+                                    <span>Active Selection</span>
+                                </span>
+                            </div>
                         </div>
-                        <div id="map-side-panel" style="width:260px; min-width:220px; border-left:1px solid var(--bs-border-color); padding-left:1rem;">
-                            <h6 id="map-items-heading" class="fw-bold mb-2"></h6>
-                            <div id="map-items-list">
-                                <p class="text-muted small">Click any drawer position on the map to inspect stored parts.</p>
+                        <div id="map-side-panel" style="width:290px; min-width:250px; border-left:1px solid var(--bs-border-color); padding-left:1rem;" class="d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom">
+                                    <h6 class="text-uppercase tracking-wider fw-bold text-muted small mb-0">Drawer Inspector</h6>
+                                    <span class="text-primary small fw-semibold" style="font-size:0.75rem;">Click drawer to inspect</span>
+                                </div>
+                                <div id="map-inspector-content">
+                                    <div class="p-3 rounded border text-muted small text-center bg-body-tertiary">
+                                        Click any drawer position on the map to inspect stored parts.
+                                    </div>
+                                </div>
+                                <!-- Legacy elements kept for backward compatibility -->
+                                <h6 id="map-items-heading" class="fw-bold mb-2 d-none"></h6>
+                                <div id="map-items-list" class="d-none"></div>
+                            </div>
+                            <div class="pt-2 mt-3 border-top text-muted" style="font-size:0.75rem;">
+                                Full component details and stock status.
                             </div>
                         </div>
                     </div>

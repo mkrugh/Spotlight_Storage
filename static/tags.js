@@ -166,6 +166,18 @@ function itemMatchesSearch(itemElement) {
     return itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1;
 }
 
+function itemMatchesEspFilter(itemElement) {
+    if (typeof filterESP === 'undefined' || !Array.isArray(filterESP) || filterESP.length === 0) {
+        return true;
+    }
+    const itemESP = (itemElement.dataset.ip || '').toLowerCase();
+    const itemEspName = (itemElement.dataset.espName || '').toLowerCase();
+    return filterESP.some(filter => {
+        const f = (filter || '').toLowerCase().trim();
+        return f && (itemESP.includes(f) || itemEspName.includes(f));
+    });
+}
+
 function applyItemFilters() {
     const itemsContainer = document.getElementById('items-container-grid');
     if (!itemsContainer) return;
@@ -175,7 +187,8 @@ function applyItemFilters() {
     items.forEach((item) => {
         const matchesTags = itemMatchesTagFilter(item);
         const matchesSearch = itemMatchesSearch(item);
-        if (matchesTags && matchesSearch) {
+        const matchesEsp = itemMatchesEspFilter(item);
+        if (matchesTags && matchesSearch && matchesEsp) {
             item.style.display = "flex";
             visibleCount++;
         } else {
