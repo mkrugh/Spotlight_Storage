@@ -452,7 +452,7 @@ document.getElementById('esp-modal').addEventListener('show.bs.modal', function 
     const mode = button ? button.getAttribute('data-bs-mode') : null;
     if (mode === "edit") {
         document.getElementById('esp-modal-label').innerHTML = "Edit WLED";
-        document.getElementById('save-esp-button').innerHTML = "<span class=\"icon-n4px\"><i data-lucide=\"save\" class=\"me-2\"></i>Save</span>";
+        document.getElementById('save-esp-button').innerHTML = '<span class="icon-n4px me-1"><i data-lucide="save"></i></span><span>Save</span>';
         lucide.createIcons();
         const espName = button.getAttribute('data-bs-esp-name');
         const ipAddress = button.getAttribute('data-bs-esp-ip');
@@ -560,7 +560,7 @@ document.getElementById('esp-modal').addEventListener('hidden.bs.modal', functio
     resetEspTestStatus();
 
     document.getElementById('esp-modal-label').innerHTML = "Add WLED"; // Set the modal label back to its initial state
-    document.getElementById('save-esp-button').innerHTML = "<span class=\"icon-n4px\"><i data-lucide=\"save\" class=\"me-2\"></i>Save</span>";
+    document.getElementById('save-esp-button').innerHTML = '<span class="icon-n4px me-1"><i data-lucide="plus"></i></span><span>Add</span>';
     lucide.createIcons();
 
     // Clear input fields

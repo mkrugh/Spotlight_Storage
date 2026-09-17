@@ -476,11 +476,11 @@ def get_all_tags():
             try:
                 parsed = json.loads(raw_tag)
                 if isinstance(parsed, list):
-                    tags.extend(parsed)
-                elif isinstance(parsed, str):
-                    tags.append(parsed)
+                    tags.extend(set(str(t).strip() for t in parsed if str(t).strip()))
+                elif isinstance(parsed, str) and parsed.strip():
+                    tags.append(parsed.strip())
             except (json.JSONDecodeError, TypeError, ValueError):
-                tags.extend([t.strip() for t in raw_tag.split(',') if t.strip()])
+                tags.extend(set(t.strip() for t in raw_tag.split(',') if t.strip()))
         # Count the occurrences of each tag
         tag_counts = Counter(tags)
         unique_tags_with_count = [{'tag': tag, 'count': count} for tag, count in tag_counts.items()]

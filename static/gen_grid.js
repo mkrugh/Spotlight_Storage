@@ -265,6 +265,7 @@ function drawMultiSectionGrid(mode, sections) {
             handleCellClick(event, mode);
         };
     }
+    setupCanvasHoverTracking(mode);
 }
 
 function redrawMultiSectionGrid(mode, sections) {
@@ -505,7 +506,7 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
         };
         redrawGrid(rows, columns, "item", startX, startY, serpentineDirection);
     }
-
+    setupCanvasHoverTracking(mode);
 }
 function handleCellClick(event, mode) {
     const activeSections = getActiveSections(mode);
@@ -783,5 +784,203 @@ function convertLedNumber(ledNumber, startX, startY, serpentineDirection, rows, 
 
     return  ledNumber;
 }
+
+function hideHoverIndicators(mode) {
+    const highlight = document.getElementById(`${mode}-cell-highlight`);
+    const tooltip = document.getElementById(`${mode}-cell-tooltip`);
+    if (highlight) highlight.classList.add('d-none');
+    if (tooltip) tooltip.classList.add('d-none');
+}
+
+function getCellAtPointer(event, mode) {
+    const canvas = document.getElementById(mode + '-responsive-canvas');
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
+
+    const activeSections = getActiveSections(mode);
+    if (activeSections) {
+        const normalizedSections = activeSections.map(s => ({
+            rows: Math.max(1, parseInt(s.rows) || 1),
+            cols: Math.max(1, parseInt(s.cols) || 1),
+            start_left: String(s.start_left || 'left').toLowerCase() === '1' ? 'right' : String(s.start_left || 'left').toLowerCase(),
+            start_top: String(s.start_top || 'top').toLowerCase(),
+            serpentine_direction: String(s.serpentine_direction || 'horizontal').toLowerCase() === '1' ? 'vertical' : String(s.serpentine_direction || 'horizontal').toLowerCase()
+        }));
+        const maxCols = Math.max(...normalizedSections.map(s => s.cols));
+        let lineWidth = 2;
+        let boxHeight = Math.max(50, Math.floor((canvas.width - lineWidth) / maxCols));
+        let currentSecY = 0;
+        let cumLedOffset = 0;
+
+        for (let secIdx = 0; secIdx < normalizedSections.length; secIdx++) {
+            const s = normalizedSections[secIdx];
+            const secHeight = s.rows * boxHeight;
+            if (y >= currentSecY && y < currentSecY + secHeight) {
+                const r = Math.max(0, Math.min(s.rows - 1, Math.floor((y - currentSecY) / boxHeight)));
+                const colWidth = (canvas.width - lineWidth) / s.cols;
+                const c = Math.max(0, Math.min(s.cols - 1, Math.floor(x / colWidth)));
+                const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                const globalLed = cumLedOffset + localLed;
+
+                const cellPixelX = (c * colWidth) / scaleX;
+                const cellPixelY = (currentSecY + r * boxHeight) / scaleY;
+                const cellPixelW = colWidth / scaleX;
+                const cellPixelH = boxHeight / scaleY;
+
+                return {
+                    mode,
+                    section: secIdx + 1,
+                    totalSections: normalizedSections.length,
+                    row: r + 1,
+                    col: c + 1,
+                    ledNumber: globalLed,
+                    pixelX: cellPixelX,
+                    pixelY: cellPixelY,
+                    pixelW: cellPixelW,
+                    pixelH: cellPixelH
+                };
+            }
+            currentSecY += secHeight;
+            cumLedOffset += s.rows * s.cols;
+        }
+        return null;
+    }
+
+    let rows, columns, startX, startY, serpentineDirection;
+    if (mode === "esp") {
+        rows = parseInt(document.getElementById('esp_rows')?.value) || 1;
+        columns = parseInt(document.getElementById('esp_columns')?.value) || 1;
+        const startXEl = document.getElementById('esp_startx');
+        startX = (startXEl ? startXEl.options[startXEl.selectedIndex]?.getAttribute("data-startx") : "left")?.toLowerCase() || "left";
+        const startYEl = document.getElementById('esp_starty');
+        startY = (startYEl ? startYEl.options[startYEl.selectedIndex]?.getAttribute("data-starty") : "top")?.toLowerCase() || "top";
+        const serpEl = document.getElementById('esp_serpentine');
+        serpentineDirection = (serpEl ? serpEl.options[serpEl.selectedIndex]?.getAttribute("data-serpentine") : "horizontal")?.toLowerCase() || "horizontal";
+    } else {
+        const selectEspDropdown = document.getElementById('item_esp_select');
+        if (!selectEspDropdown || selectEspDropdown.selectedIndex < 0) return null;
+        const selectedOption = selectEspDropdown.options[selectEspDropdown.selectedIndex];
+        if (!selectedOption) return null;
+
+        rows = parseInt(selectedOption.getAttribute("data-esp-rows")) || 1;
+        columns = parseInt(selectedOption.getAttribute("data-esp-columns")) || 1;
+        startX = (selectedOption.getAttribute("data-esp-start-x") || "left").toLowerCase();
+        startY = (selectedOption.getAttribute("data-esp-start-y") || "top").toLowerCase();
+        serpentineDirection = (selectedOption.getAttribute("data-esp-serpentine") || "horizontal").toLowerCase();
+        if (startX == '1') startX = "right";
+        if (serpentineDirection == '1') serpentineDirection = "vertical";
+    }
+
+    let lineWidth = 2;
+    let boxSize = (canvas.width - lineWidth) / columns;
+    if (boxSize <= 60) boxSize = 60;
+
+    const r = Math.min(rows - 1, Math.max(0, Math.floor(y / boxSize)));
+    const c = Math.min(columns - 1, Math.max(0, Math.floor(x / boxSize)));
+    const ledNumber = calculateLedNumber(r, c, startX, startY, serpentineDirection, rows, columns);
+
+    const cellPixelX = (c * boxSize) / scaleX;
+    const cellPixelY = (r * boxSize) / scaleY;
+    const cellPixelW = boxSize / scaleX;
+    const cellPixelH = boxSize / scaleY;
+
+    return {
+        mode,
+        section: null,
+        totalSections: 1,
+        row: r + 1,
+        col: c + 1,
+        ledNumber,
+        pixelX: cellPixelX,
+        pixelY: cellPixelY,
+        pixelW: cellPixelW,
+        pixelH: cellPixelH,
+        totalLeds: rows * columns
+    };
+}
+
+function setupCanvasHoverTracking(mode) {
+    const canvas = document.getElementById(`${mode}-responsive-canvas`);
+    const container = document.getElementById(`${mode}-canvas-container`);
+    const highlight = document.getElementById(`${mode}-cell-highlight`);
+    const tooltip = document.getElementById(`${mode}-cell-tooltip`);
+
+    if (!canvas || !container || !highlight || !tooltip) return;
+    if (canvas.dataset.hoverInitialized === 'true') return;
+    canvas.dataset.hoverInitialized = 'true';
+
+    canvas.addEventListener('pointermove', function (e) {
+        const cell = getCellAtPointer(e, mode);
+        if (!cell) {
+            highlight.classList.add('d-none');
+            tooltip.classList.add('d-none');
+            return;
+        }
+
+        // Highlight ring placement
+        highlight.style.left = `${cell.pixelX}px`;
+        highlight.style.top = `${cell.pixelY}px`;
+        highlight.style.width = `${cell.pixelW}px`;
+        highlight.style.height = `${cell.pixelH}px`;
+        highlight.classList.remove('d-none');
+
+        // Tooltip content
+        let statusHtml = '';
+        if (mode === 'item') {
+            if (clickedCells.includes(cell.ledNumber)) {
+                statusHtml = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle px-1 py-0">Selected</span>';
+            } else if (occupiedCells.includes(cell.ledNumber)) {
+                statusHtml = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle px-1 py-0">Occupied</span>';
+            } else if (cell.ledNumber === 1) {
+                statusHtml = '<span class="badge bg-success-subtle text-success border border-success-subtle px-1 py-0">Start LED #1</span>';
+            } else {
+                statusHtml = '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-1 py-0">Available</span>';
+            }
+        } else if (mode === 'esp') {
+            if (cell.ledNumber === 1) {
+                statusHtml = '<span class="badge bg-success-subtle text-success border border-success-subtle px-1 py-0">Start LED #1</span>';
+            } else if (cell.totalLeds && cell.ledNumber === cell.totalLeds) {
+                statusHtml = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-1 py-0">End LED</span>';
+            }
+        }
+
+        const secInfo = cell.section ? `Sec ${cell.section} · ` : '';
+        tooltip.innerHTML = `
+            <div class="d-flex align-items-center gap-1.5 mb-0.5">
+                <span class="fw-bold">Bin #${cell.ledNumber}</span>
+                ${statusHtml}
+            </div>
+            <div class="text-body-secondary small">${secInfo}Row ${cell.row}, Col ${cell.col} (LED ${cell.ledNumber})</div>
+        `;
+
+        // Position tooltip centered horizontally above cell
+        const tooltipX = cell.pixelX + cell.pixelW / 2;
+        tooltip.style.left = `${tooltipX}px`;
+
+        if (cell.pixelY < 50) {
+            // Flip below if too close to top
+            tooltip.style.top = `${cell.pixelY + cell.pixelH + 8}px`;
+            tooltip.style.transform = 'translate(-50%, 0)';
+        } else {
+            tooltip.style.top = `${cell.pixelY}px`;
+            tooltip.style.transform = 'translate(-50%, -100%)';
+        }
+        tooltip.classList.remove('d-none');
+    });
+
+    canvas.addEventListener('pointerleave', function () {
+        hideHoverIndicators(mode);
+    });
+}
+
+document.getElementById('item-modal')?.addEventListener('hidden.bs.modal', () => hideHoverIndicators('item'));
+document.getElementById('esp-modal')?.addEventListener('hidden.bs.modal', () => hideHoverIndicators('esp'));
+
 
 

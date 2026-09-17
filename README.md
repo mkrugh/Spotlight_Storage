@@ -23,7 +23,8 @@ This fork modernizes the codebase, enhances usability, strengthens security, add
 - **Multilingual Support**: Fully translated into 6 languages: English, German, French, Dutch, Finnish, and Polish.
 - **Light & Dark Mode**: Clean Bootstrap 5 interface with responsive theme switching.
 - **Security Hardened**: Built-in SSRF protection, strict path traversal defense, file type verification, secure HTTP headers, and non-root Docker container execution.
-- **Automated Test Suite**: 146 automated unit, integration, and build sanity tests running in under 5 seconds with zero warnings.
+- **Tag Filtering & Relevance Sorting**: Filter inventory with configurable "Match Any (OR)" or "Match All (AND)" logic, ranking items by match relevance (highest matching tags first) with instant tag list synchronization.
+- **Automated Test Suite**: 148 automated unit, integration, and build sanity tests.
 
 ---
 
@@ -186,7 +187,7 @@ To access Spotlight Storage from smartphones, tablets, or other devices on your 
 
 ## Testing & Verification
 
-Spotlight Storage includes a full automated test suite with **146 tests** covering unit math, database operations, REST endpoints, WLED pulses, security constraints, and build sanity.
+Spotlight Storage includes a full automated test suite with **148 tests** covering unit math, database operations, REST endpoints, WLED pulses, security constraints, and build sanity.
 
 Run the test suite locally with `pytest`:
 ```bash

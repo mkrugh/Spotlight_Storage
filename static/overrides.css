@@ -446,11 +446,71 @@ label {
     transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
+.app-navbar .navbar-collapse {
+    align-items: center;
+}
+
+.app-navbar .navbar-nav {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.app-navbar .navbar-nav .nav-item {
+    display: flex;
+    align-items: center;
+}
+
+.app-navbar .btn {
+    white-space: nowrap !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    line-height: 1.2;
+}
+
+.app-navbar .navbar-nav .btn {
+    padding: 0.35rem 0.65rem;
+}
+
+.app-navbar .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    height: 38px;
+}
+
+.app-navbar .dropdown {
+    display: flex;
+    align-items: center;
+}
+
+@media (max-width: 991.98px) {
+    .app-navbar .navbar-collapse {
+        padding-top: 0.75rem;
+        padding-bottom: 0.5rem;
+    }
+    .app-navbar .navbar-nav {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem !important;
+    }
+    .app-navbar .navbar-nav .nav-item {
+        margin-left: 0 !important;
+    }
+    .app-navbar .search-input-wrapper {
+        min-width: 100% !important;
+        max-width: 100% !important;
+        margin-bottom: 0.5rem !important;
+    }
+}
+
 .search-input-wrapper {
     position: relative;
     width: 100%;
-    min-width: 150px;
-    max-width: 320px;
+    min-width: 120px;
+    max-width: 260px;
 }
 
 .search-input-wrapper input {
@@ -902,3 +962,163 @@ label {
     }
 }
 
+/* UI-12: Interactive Matrix Canvas Hover Tooltip & Coordinate Tracking */
+.matrix-cell-highlight {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid #0d6efd;
+    box-shadow: 0 0 10px rgba(13, 110, 253, 0.65), inset 0 0 6px rgba(13, 110, 253, 0.25);
+    border-radius: 4px;
+    z-index: 5;
+    transition: left 0.05s ease-out, top 0.05s ease-out, width 0.05s ease-out, height 0.05s ease-out;
+}
+
+.matrix-cell-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 25;
+    background: rgba(var(--bs-body-bg-rgb), 0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    white-space: nowrap;
+    transition: opacity 0.1s ease;
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+}
+
+.matrix-cell-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px 5px 0;
+    border-style: solid;
+    border-color: var(--bs-border-color) transparent transparent;
+}
+
+/* UI-13: Non-Blocking Toast Notifications & Feedback */
+.app-toast {
+    background: rgba(var(--bs-body-bg-rgb), 0.92) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--bs-border-color-translucent) !important;
+    border-radius: 0.65rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    color: var(--bs-body-color);
+    min-width: 280px;
+    max-width: 380px;
+}
+
+.app-toast .toast-header {
+    background: transparent;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    color: var(--bs-body-color);
+    padding: 0.5rem 0.75rem;
+}
+
+.app-toast .toast-body {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.875rem;
+}
+
+/* UI-14: Builds Kit Assembly Stock Readiness & Part Badges */
+.build-item-card {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.build-item-card:hover {
+    border-color: var(--bs-border-color) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.build-readiness-chip {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.55rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.part-stock-badge {
+    font-size: 0.75rem;
+    font-family: var(--bs-font-monospace);
+    padding: 0.3rem 0.55rem;
+    border-radius: 0.35rem;
+}
+
+
+
+/* UI-15: Enhanced Contrast for Outline Buttons in Light Mode (WCAG AA Compliance) */
+[data-bs-theme="light"] .btn-outline-warning {
+    color: #8a5a00;
+    border-color: #8a5a00;
+}
+[data-bs-theme="light"] .btn-outline-warning:hover,
+[data-bs-theme="light"] .btn-outline-warning:focus,
+[data-bs-theme="light"] .btn-outline-warning:active,
+[data-bs-theme="light"] .btn-outline-warning.active {
+    color: #ffffff !important;
+    background-color: #8a5a00;
+    border-color: #8a5a00;
+}
+
+[data-bs-theme="light"] .btn-outline-info {
+    color: #096175;
+    border-color: #096175;
+}
+[data-bs-theme="light"] .btn-outline-info:hover,
+[data-bs-theme="light"] .btn-outline-info:focus,
+[data-bs-theme="light"] .btn-outline-info:active,
+[data-bs-theme="light"] .btn-outline-info.active {
+    color: #ffffff !important;
+    background-color: #096175;
+    border-color: #096175;
+}
+
+[data-bs-theme="light"] .btn-outline-success {
+    color: #0f5132;
+    border-color: #0f5132;
+}
+[data-bs-theme="light"] .btn-outline-success:hover,
+[data-bs-theme="light"] .btn-outline-success:focus,
+[data-bs-theme="light"] .btn-outline-success:active,
+[data-bs-theme="light"] .btn-outline-success.active {
+    color: #ffffff !important;
+    background-color: #0f5132;
+    border-color: #0f5132;
+}
+
+[data-bs-theme="light"] .btn-outline-secondary {
+    color: #495057;
+    border-color: #495057;
+}
+[data-bs-theme="light"] .btn-outline-secondary:hover,
+[data-bs-theme="light"] .btn-outline-secondary:focus,
+[data-bs-theme="light"] .btn-outline-secondary:active,
+[data-bs-theme="light"] .btn-outline-secondary.active {
+    color: #ffffff !important;
+    background-color: #495057;
+    border-color: #495057;
+}
+
+[data-bs-theme="light"] .btn-outline-danger {
+    color: #b02a37;
+    border-color: #b02a37;
+}
+[data-bs-theme="light"] .btn-outline-danger:hover,
+[data-bs-theme="light"] .btn-outline-danger:focus,
+[data-bs-theme="light"] .btn-outline-danger:active,
+[data-bs-theme="light"] .btn-outline-danger.active {
+    color: #ffffff !important;
+    background-color: #b02a37;
+    border-color: #b02a37;
+}

@@ -3,7 +3,7 @@
 ## Overview
 This document provides an architectural walkthrough and verification report for the automated test suite, security hardening, multi-threaded concurrency safeguards, and production container modernization implemented for **Spotlight Storage**.
 
-The complete test suite contains **146 automated tests across 20 test modules**, executing in **~4.0 seconds** with **100% pass rate** and **zero warnings**.
+The complete test suite contains **148 automated tests across 20 test modules**.
 
 ---
 
@@ -16,10 +16,10 @@ tests/
 │
 ├── unit/
 │   ├── __init__.py
-│   ├── test_matrix_math.py           # LED serpentine math, layout, corner offsets, multi-section (14 tests)
+│   ├── test_matrix_math.py           # LED serpentine math, layout, corner offsets, multi-section (13 tests)
 │   ├── test_color_conversion.py      # Hex to RGB conversions & fallback behavior (6 tests)
 │   ├── test_validation.py            # IP/URL validation & file extension checks (6 tests)
-│   ├── test_db_items.py              # Item CRUD, quantities, image updates, tags (7 tests)
+│   ├── test_db_items.py              # Item CRUD, quantities, image updates, tags (8 tests)
 │   ├── test_db_esp.py                # ESP device CRUD, lookups, and validations (6 tests)
 │   ├── test_db_builds.py             # Builds / BOM recipes, stock deduction, cascades (8 tests)
 │   ├── test_db_settings.py           # App settings & color array serialization (2 tests)
@@ -32,7 +32,7 @@ tests/
 │   ├── test_api_esp_test.py          # /api/esp/test connection verification & double-flash pulse (13 tests)
 │   ├── test_api_builds.py            # /api/builds creation, update, and execution (7 tests)
 │   ├── test_api_settings.py          # /api/settings GET and POST (2 tests)
-│   ├── test_api_tags.py              # /api/tags frequency extraction (2 tests)
+│   ├── test_api_tags.py              # /api/tags frequency extraction and per-item deduplication (3 tests)
 │   ├── test_image_handling.py        # /upload and /proxy-image validation (8 tests)
 │   ├── test_security.py              # SSRF, SVG blocking, size caps, UUID filenames, headers (7 tests)
 │   ├── test_security_expanded.py     # Path traversal, advanced SSRF, SQLi, input fuzzing (17 tests)
@@ -54,16 +54,16 @@ tests/
 
 | Category | Modules | Test Count | Key Coverage |
 | :--- | :--- | :--- | :--- |
-| **Unit Logic** | `test_matrix_math.py`, `test_color_conversion.py`, `test_validation.py` | 26 | LED serpentine math, matrix corner offsets, multi-section sequential routing, hex colors, IP/URL & port validation |
-| **Database Operations** | `test_db_items.py`, `test_db_esp.py`, `test_db_builds.py`, `test_db_settings.py` | 23 | CRUD operations, tag aggregations, BOM recipe stock deductions, cascade deletes |
+| **Unit Logic** | `test_matrix_math.py`, `test_color_conversion.py`, `test_validation.py` | 25 | LED serpentine math, matrix corner offsets, multi-section sequential routing, hex colors, IP/URL & port validation |
+| **Database Operations** | `test_db_items.py`, `test_db_esp.py`, `test_db_builds.py`, `test_db_settings.py` | 24 | CRUD operations, tag aggregations, BOM recipe stock deductions, cascade deletes |
 | **Internationalization (i18n)** | `test_i18n_keys.py` | 3 | JSON parsing validity & 100% key parity across all 6 translations (`de`, `en`, `fi`, `fr`, `nl`, `pl`) |
-| **REST APIs & Hardware** | `test_api_items.py`, `test_api_esp.py`, `test_api_esp_test.py`, `test_api_builds.py`, `test_api_settings.py`, `test_api_tags.py`, `test_api_endpoints_misc.py`, `test_wled_controller.py` | 50 | REST endpoints, multi-section ESP configurations, WLED verification, pulse sequence, UI links, `/favicon.ico` |
+| **REST APIs & Hardware** | `test_api_items.py`, `test_api_esp.py`, `test_api_esp_test.py`, `test_api_builds.py`, `test_api_settings.py`, `test_api_tags.py`, `test_api_endpoints_misc.py`, `test_wled_controller.py` | 51 | REST endpoints, multi-section ESP configurations, WLED verification, pulse sequence, UI links, `/favicon.ico` |
 | **Image & File Handling** | `test_image_handling.py` | 8 | File extension allowlisting, upstream proxying, 5MB memory buffer cap |
 | **Security & Hardening** | `test_security.py`, `test_security_expanded.py` | 24 | Advanced SSRF (decimal, octal, hex, IPv6), path traversal, SQLi, DOM XSS, security headers |
 | **Concurrency & Thread-Safety** | `test_concurrency.py` | 3 | Multi-threaded `app.state_lock`, simultaneous timer updates, SQLite concurrent transactions |
 | **Performance & Scaling** | `test_performance.py` | 2 | 300-item bulk inventory queries (< 50ms) and tag aggregations under scale |
 | **Build & Static Assets** | `test_requirements.py`, `test_static_assets.py` | 8 | Dockerfile non-root user, healthcheck, dependency import sanity, HTML static link verification |
-| **Total** | **20 Modules** | **146 Tests** | **100% Passing (0 Warnings)** |
+| **Total** | **20 Modules** | **148 Tests** | **100% Passing (0 Warnings)** |
 
 ---
 
@@ -151,8 +151,8 @@ pytest tests/build/ -v
 ## Verification Results
 
 ```text
-============================= 119 passed in 4.19s ==============================
+============================= 148 passed in 4.29s ==============================
 ```
-- **119 passed, 0 failed.**
+- **148 passed, 0 failed.**
 - **0 deprecation warnings.**
 - **0 pytest warnings.**

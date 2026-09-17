@@ -68,5 +68,8 @@
     "copy_item": "Kopio esine",
     "delete_item": "Poista",
     "crop_image": "Rajaa kuva",
-    "link_btn_label": "Osta lisää"
+    "link_btn_label": "Osta lisää",
+    "tag_match_mode": "Vastaavuustila",
+    "tag_match_any": "Mikä tahansa (TAI)",
+    "tag_match_all": "Kaikki (JA)"
 }

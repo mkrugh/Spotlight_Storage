@@ -170,6 +170,7 @@ function drawMapCanvas(esp) {
     }
 
     canvas.onclick = (e) => handleMapClick(e, esp, boxSize, lw, startX, startY, serpDir);
+    setupMapHoverTracking(esp, false, boxSize, lw, startX, startY, serpDir);
 }
 
 function drawMultiSectionMap(esp) {
@@ -270,6 +271,7 @@ function drawMultiSectionMap(esp) {
     });
 
     canvas.onclick = (e) => handleMultiSectionMapClick(e, esp, normalizedSections, boxHeight, lw);
+    setupMapHoverTracking(esp, true, boxHeight, lw, null, null, null, normalizedSections);
 }
 
 function handleMultiSectionMapClick(event, esp, sections, boxHeight, lw) {
@@ -366,3 +368,138 @@ function renderMapItems(ledNum, items) {
         </div>
     `).join('');
 }
+
+let currentMapContext = null;
+
+function setupMapHoverTracking(esp, isMulti, boxDim, lw, startX, startY, serpDir, normalizedSections) {
+    currentMapContext = { esp, isMulti, boxDim, lw, startX, startY, serpDir, normalizedSections };
+    const canvas = document.getElementById('map-responsive-canvas');
+    const container = document.getElementById('map-canvas-container');
+    const highlight = document.getElementById('map-cell-highlight');
+    const tooltip = document.getElementById('map-cell-tooltip');
+    if (!canvas || !container || !highlight || !tooltip) return;
+
+    if (canvas.dataset.hoverInitialized === 'true') return;
+    canvas.dataset.hoverInitialized = 'true';
+
+    canvas.addEventListener('pointermove', function (e) {
+        if (!currentMapContext) return;
+        const ctx = currentMapContext;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        let cell = null;
+        if (ctx.isMulti && ctx.normalizedSections) {
+            const sections = ctx.normalizedSections;
+            const boxHeight = ctx.boxDim;
+            let currentSecY = 0;
+            let cumLedOffset = 0;
+            for (let secIdx = 0; secIdx < sections.length; secIdx++) {
+                const s = sections[secIdx];
+                const secHeight = s.rows * boxHeight;
+                if (y >= currentSecY && y < currentSecY + secHeight) {
+                    const r = Math.max(0, Math.min(s.rows - 1, Math.floor((y - currentSecY) / boxHeight)));
+                    const colWidth = (canvas.width - ctx.lw) / s.cols;
+                    const c = Math.max(0, Math.min(s.cols - 1, Math.floor(x / colWidth)));
+                    const localLed = calculateLedNumber(r, c, s.start_left, s.start_top, s.serpentine_direction, s.rows, s.cols);
+                    const globalLed = cumLedOffset + localLed;
+
+                    cell = {
+                        section: secIdx + 1,
+                        row: r + 1,
+                        col: c + 1,
+                        ledNumber: globalLed,
+                        pixelX: (c * colWidth) / scaleX,
+                        pixelY: (currentSecY + r * boxHeight) / scaleY,
+                        pixelW: colWidth / scaleX,
+                        pixelH: boxHeight / scaleY
+                    };
+                    break;
+                }
+                currentSecY += secHeight;
+                cumLedOffset += s.rows * s.cols;
+            }
+        } else {
+            const rows = parseInt(ctx.esp.rows) || 1;
+            const columns = parseInt(ctx.esp.cols) || 1;
+            const boxSize = ctx.boxDim;
+            const r = Math.min(rows - 1, Math.max(0, Math.floor(y / boxSize)));
+            const c = Math.min(columns - 1, Math.max(0, Math.floor(x / boxSize)));
+            const ledNum = calculateLedNumber(r, c, ctx.startX, ctx.startY, ctx.serpDir, rows, columns);
+
+            cell = {
+                section: null,
+                row: r + 1,
+                col: c + 1,
+                ledNumber: ledNum,
+                pixelX: (c * boxSize) / scaleX,
+                pixelY: (r * boxSize) / scaleY,
+                pixelW: boxSize / scaleX,
+                pixelH: boxSize / scaleY
+            };
+        }
+
+        if (!cell) {
+            highlight.classList.add('d-none');
+            tooltip.classList.add('d-none');
+            return;
+        }
+
+        highlight.style.left = `${cell.pixelX}px`;
+        highlight.style.top = `${cell.pixelY}px`;
+        highlight.style.width = `${cell.pixelW}px`;
+        highlight.style.height = `${cell.pixelH}px`;
+        highlight.classList.remove('d-none');
+
+        const occupancy = buildOccupancyMap(ctx.esp);
+        const itemsAtPos = occupancy[cell.ledNumber] || [];
+        let statusBadge = '';
+        let subtitle = '';
+
+        if (itemsAtPos.length > 0) {
+            statusBadge = `<span class="badge bg-warning-subtle text-warning border border-warning-subtle px-1 py-0">${itemsAtPos.length} part${itemsAtPos.length > 1 ? 's' : ''}</span>`;
+            subtitle = escapeHtml(itemsAtPos[0].name) + (itemsAtPos.length > 1 ? ` (+${itemsAtPos.length - 1} more)` : '');
+        } else {
+            statusBadge = `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-1 py-0">Empty</span>`;
+            subtitle = 'Available storage bin';
+        }
+
+        const secInfo = cell.section ? `Sec ${cell.section} · ` : '';
+        tooltip.innerHTML = `
+            <div class="d-flex align-items-center gap-1.5 mb-0.5">
+                <span class="fw-bold">Bin #${cell.ledNumber}</span>
+                ${statusBadge}
+            </div>
+            <div class="text-body-secondary small">${secInfo}R${cell.row} C${cell.col} · ${subtitle}</div>
+        `;
+
+        const tooltipX = cell.pixelX + cell.pixelW / 2;
+        tooltip.style.left = `${tooltipX}px`;
+        if (cell.pixelY < 50) {
+            tooltip.style.top = `${cell.pixelY + cell.pixelH + 8}px`;
+            tooltip.style.transform = 'translate(-50%, 0)';
+        } else {
+            tooltip.style.top = `${cell.pixelY}px`;
+            tooltip.style.transform = 'translate(-50%, -100%)';
+        }
+        tooltip.classList.remove('d-none');
+    });
+
+    canvas.addEventListener('pointerleave', function () {
+        highlight.classList.add('d-none');
+        tooltip.classList.add('d-none');
+    });
+}
+
+document.getElementById('map-modal')?.addEventListener('hidden.bs.modal', function () {
+    const highlight = document.getElementById('map-cell-highlight');
+    const tooltip = document.getElementById('map-cell-tooltip');
+    if (highlight) highlight.classList.add('d-none');
+    if (tooltip) tooltip.classList.add('d-none');
+});
+

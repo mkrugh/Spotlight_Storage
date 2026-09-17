@@ -68,5 +68,8 @@
     "copy_item": "Item Kopiëren",
     "delete_item": "Verwijderen",
     "crop_image": "Afbeelding Bijsnijden",
-    "link_btn_label": "Winkel voor meer"
+    "link_btn_label": "Winkel voor meer",
+    "tag_match_mode": "Overeenkomstmodus",
+    "tag_match_any": "Elke (OF)",
+    "tag_match_all": "Alle (EN)"
 }

@@ -68,5 +68,8 @@
     "copy_item": "Kopiuj przedmiot",
     "delete_item": "Usuń",
     "crop_image": "Przytnij obraz",
-    "link_btn_label": "Kup więcej"
+    "link_btn_label": "Kup więcej",
+    "tag_match_mode": "Tryb dopasowania",
+    "tag_match_any": "Dowolny (LUB)",
+    "tag_match_all": "Wszystkie (I)"
 }

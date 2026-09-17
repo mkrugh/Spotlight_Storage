@@ -68,5 +68,8 @@
     "copy_item": "Copier l'article",
     "delete_item": "Supprimer",
     "crop_image": "Recadrer l'image",
-    "link_btn_label": "Acheter plus"
+    "link_btn_label": "Acheter plus",
+    "tag_match_mode": "Mode de correspondance",
+    "tag_match_any": "Au moins un (OU)",
+    "tag_match_all": "Tous (ET)"
 }

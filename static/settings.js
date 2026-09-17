@@ -685,22 +685,31 @@ document.getElementById("inventur").addEventListener("click", function () {
         savePendingInput();
         const currentItem = itemsData[currentnventurItemIndex];
         if (!currentItem) return;
-        isEditingItem = true;
-        console.log("editing item");
-        removeLocalStorage();
 
-        $("#item-modal").modal("show");
+        if (typeof resetModal === 'function') {
+            resetModal(true);
+        }
+        isEditingItem = true;
+        isCopyingItem = false;
+        editingItemId = currentItem.id;
+        editingItemIP = currentItem.ip;
+
+        const modalLabel = document.getElementById("item-modal-label");
+        if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.edit_btn_label) ? translation.edit_btn_label : "Edit Item";
+        const saveBtnLabel = document.getElementById("item_add_btn_label");
+        if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.save_btn_label) ? translation.save_btn_label : "Save";
+
         confirmationModal.hide();
-        document.getElementById("item_name").value = currentItem.name;
-        document.getElementById("item_url").value = currentItem.link;
-        document.getElementById("item_image").value = currentItem.image;
+        document.getElementById("item_name").value = currentItem.name || "";
+        document.getElementById("item_url").value = currentItem.link || "";
+        document.getElementById("item_image").value = currentItem.image || "";
         document.getElementById("item_quantity").value = currentItem.quantity;
         const minQtyEl = document.getElementById("item_min_quantity");
         if (minQtyEl) {
             minQtyEl.value = (currentItem.min_quantity !== undefined && currentItem.min_quantity !== null) ? currentItem.min_quantity : 3;
         }
         if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview(currentItem.image);
+            updateItemImagePreview(currentItem.image || '');
         }
 
         // Set LED positions for editing
@@ -713,17 +722,23 @@ document.getElementById("inventur").addEventListener("click", function () {
         localStorage.setItem('edit_image_path', JSON.stringify(currentItem.image || ''));
 
         // Set item tags for editing
+        let itemTagsArray = [];
         if (currentItem.tags) {
-            const cleanedTags = currentItem.tags.replace(/[\[\]'"`\\]/g, '');
-            const itemTagsArray = cleanedTags.split(',');
-            localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
-            tags = itemTagsArray;
-            loadTagsIntoTagify();
+            try {
+                const parsed = JSON.parse(currentItem.tags);
+                if (Array.isArray(parsed)) itemTagsArray = parsed;
+                else if (typeof parsed === 'string') itemTagsArray = [parsed];
+            } catch (e) {
+                const cleanedTags = currentItem.tags.replace(/[\[\]'"`\\]/g, '');
+                itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
+            }
+        }
+        localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
+        if (typeof loadTagsIntoTagify === 'function') {
+            loadTagsIntoTagify(itemTagsArray);
         }
 
-        // Set editing item ID and IP
-        editingItemId = currentItem.id;
-        editingItemIP = currentItem.ip;
+        $("#item-modal").modal("show");
     };
 
     // Handle the "continue" button click

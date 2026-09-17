@@ -68,5 +68,8 @@
     "copy_item": "Copy Item",
     "delete_item": "Delete",
     "crop_image": "Crop Image",
-    "link_btn_label": "Shop for more"
+    "link_btn_label": "Shop for more",
+    "tag_match_mode": "Match Mode",
+    "tag_match_any": "Any (OR)",
+    "tag_match_all": "All (AND)"
 }

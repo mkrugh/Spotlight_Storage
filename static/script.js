@@ -52,6 +52,120 @@ let isCopyingItem = false;
 let editingItemId = null; // Track the ID of the item being edited
 let editingItemIP = null; // Track the IP of the item being edited
 
+// UI-13: Toast Notification System
+function showToast(message, type = 'info', title = null, duration = 3500) {
+    const container = document.getElementById('app-toast-container');
+    if (!container) return;
+
+    let iconHtml = '';
+    let borderCls = '';
+    switch (type) {
+        case 'success':
+            iconHtml = '<i data-lucide="check-circle" class="text-success flex-shrink-0" style="width: 18px; height: 18px;"></i>';
+            borderCls = 'border-success-subtle';
+            break;
+        case 'danger':
+        case 'error':
+            iconHtml = '<i data-lucide="alert-circle" class="text-danger flex-shrink-0" style="width: 18px; height: 18px;"></i>';
+            borderCls = 'border-danger-subtle';
+            break;
+        case 'warning':
+            iconHtml = '<i data-lucide="alert-triangle" class="text-warning flex-shrink-0" style="width: 18px; height: 18px;"></i>';
+            borderCls = 'border-warning-subtle';
+            break;
+        default:
+            iconHtml = '<i data-lucide="info" class="text-primary flex-shrink-0" style="width: 18px; height: 18px;"></i>';
+            borderCls = 'border-primary-subtle';
+            break;
+    }
+
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast app-toast ${borderCls} show fade align-items-center mb-2`;
+    toastEl.setAttribute('role', 'alert');
+    toastEl.setAttribute('aria-live', 'assertive');
+    toastEl.setAttribute('aria-atomic', 'true');
+
+    if (title) {
+        toastEl.innerHTML = `
+            <div class="toast-header d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    ${iconHtml}
+                    <strong class="me-auto small">${escapeHtml(title)}</strong>
+                </div>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body small text-body">${message}</div>
+        `;
+    } else {
+        toastEl.innerHTML = `
+            <div class="d-flex align-items-center p-2.5">
+                <div class="me-2.5 d-flex align-items-center">${iconHtml}</div>
+                <div class="toast-body p-0 small flex-grow-1 text-body">${message}</div>
+                <button type="button" class="btn-close btn-close-sm ms-2" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+    }
+
+    container.appendChild(toastEl);
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons({ root: toastEl });
+    }
+
+    const toast = new bootstrap.Toast(toastEl, { delay: duration, autohide: true });
+    toast.show();
+
+    toastEl.addEventListener('hidden.bs.toast', () => {
+        toastEl.remove();
+    });
+}
+
+// UI-13: Reusable Themed Confirmation Modal (Promise-based)
+function showConfirmModal({ title = 'Confirm Action', message = 'Are you sure?', confirmText = 'Confirm', confirmBtnClass = 'btn-danger' } = {}) {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById('confirm-action-modal');
+        if (!modalEl) {
+            resolve(window.confirm(message));
+            return;
+        }
+
+        const titleEl = document.getElementById('confirm-action-modal-label');
+        const messageEl = document.getElementById('confirm-action-modal-message');
+        const confirmBtn = document.getElementById('confirm-action-confirm-btn');
+
+        if (titleEl) titleEl.textContent = title;
+        if (messageEl) messageEl.textContent = message;
+        if (confirmBtn) {
+            confirmBtn.textContent = confirmText;
+            confirmBtn.className = `btn btn-sm ${confirmBtnClass}`;
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        let resolved = false;
+
+        const handleConfirm = () => {
+            resolved = true;
+            modal.hide();
+            cleanup();
+            resolve(true);
+        };
+
+        const handleHidden = () => {
+            cleanup();
+            if (!resolved) resolve(false);
+        };
+
+        const cleanup = () => {
+            confirmBtn?.removeEventListener('click', handleConfirm);
+            modalEl.removeEventListener('hidden.bs.modal', handleHidden);
+        };
+
+        confirmBtn?.addEventListener('click', handleConfirm);
+        modalEl.addEventListener('hidden.bs.modal', handleHidden);
+        modal.show();
+    });
+}
+
+
 
 // Async function to handle the addition or editing of an item
 async function addItem(event) {
@@ -78,6 +192,9 @@ async function addItem(event) {
 
     // Submit lights and tags information
     submitLights();
+    if (typeof commitTagifyInput === 'function') {
+        commitTagifyInput();
+    }
     SubmitTags();
 
     // Gather item information from the form
@@ -113,65 +230,72 @@ async function addItem(event) {
     };
 
     // Check if editing an existing item or adding a new one
-    if (isEditingItem) {
-        // Update existing item via PUT request
-        fetch(`/api/items/${editingItemId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(item),
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                // Update the displayed item in the UI
-                item.id = data.id;
-                const idx = fetchedItems.findIndex(i => i.id == editingItemId);
-                if (idx !== -1) {
-                    fetchedItems[idx] = { ...fetchedItems[idx], ...item, id: data.id };
-                }
-                const col = document.getElementById('items-container-grid').querySelector(`div[data-id="${editingItemId}"]`);
-                const updatedCol = createItem(item);
-                document.getElementById('items-container-grid').replaceChild(updatedCol, col);
-                if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
-                    sortItems(currentSortMethod, currentSortDirection);
-                }
-                lucide.createIcons();
-                fetchDataAndLoadTags();
-                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
-                    drawMapCanvas(currentMapEsp);
-                }
-            })
-            .catch((error) => console.error(error));
-    } else {
-        // Add a new item via POST request
-        fetch("/api/items", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(item),
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                // Keep in-memory fetchedItems synchronized
-                fetchedItems.push(data);
-                // Create and append the new item to the UI
-                const col = createItem(data);
-                document.getElementById('items-container-grid').appendChild(col);
-                if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
-                    sortItems(currentSortMethod, currentSortDirection);
-                }
-                lucide.createIcons();
-                fetchDataAndLoadTags();
-                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
-                    drawMapCanvas(currentMapEsp);
-                }
-            })
-            .catch((error) => console.error(error));
-    }
+    try {
+        if (isEditingItem) {
+            const currentEditId = editingItemId;
+            const response = await fetch(`/api/items/${currentEditId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(item),
+            });
+            const data = await response.json();
 
-    // Reset editing flag, remove local storage, and reset the modal
-    isEditingItem = false;
-    isCopyingItem = false;
-    removeLocalStorage();
-    resetModal();
+            // Update in-memory fetchedItems
+            const idx = fetchedItems.findIndex(i => i.id == currentEditId || i.id == data.id);
+            if (idx !== -1) {
+                fetchedItems[idx] = { ...fetchedItems[idx], ...data };
+            }
+
+            // Update the displayed item in the UI
+            const grid = document.getElementById('items-container-grid');
+            const col = grid ? (grid.querySelector(`div[data-id="${currentEditId}"]`) || grid.querySelector(`div[data-id="${data.id}"]`)) : null;
+            const updatedCol = createItem(data);
+            if (grid && col) {
+                grid.replaceChild(updatedCol, col);
+            }
+            if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
+                sortItems(currentSortMethod, currentSortDirection);
+            }
+            lucide.createIcons();
+            fetchDataAndLoadTags();
+            if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                drawMapCanvas(currentMapEsp);
+            }
+        } else {
+            // Add a new item via POST request
+            const response = await fetch("/api/items", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(item),
+            });
+            const data = await response.json();
+
+            // Keep in-memory fetchedItems synchronized
+            fetchedItems.push(data);
+            // Create and append the new item to the UI
+            const grid = document.getElementById('items-container-grid');
+            const col = createItem(data);
+            if (grid) {
+                grid.appendChild(col);
+            }
+            if (typeof currentSortMethod !== 'undefined' && currentSortMethod) {
+                sortItems(currentSortMethod, currentSortDirection);
+            }
+            lucide.createIcons();
+            fetchDataAndLoadTags();
+            if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                drawMapCanvas(currentMapEsp);
+            }
+        }
+    } catch (error) {
+        console.error("Error saving item:", error);
+    } finally {
+        // Reset editing flag, remove local storage, and reset the modal
+        isEditingItem = false;
+        isCopyingItem = false;
+        removeLocalStorage();
+        resetModal();
+    }
 }
 
 
@@ -272,13 +396,27 @@ function populateEspDropdown() {
     }).catch((error) => console.error(error));
 }
 
-document.getElementById('item-modal').addEventListener('show.bs.modal', function () {
+document.getElementById('item-modal').addEventListener('show.bs.modal', function (event) {
     document.getElementById("item-error-alert").classList.add("d-none");
     document.getElementById("item-error-list").innerHTML = "";
-    if (!isEditingItem && !isCopyingItem) {
-        if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview('');
-        }
+
+    const triggerBtn = event ? event.relatedTarget : null;
+    const isExplicitAdd = triggerBtn && (
+        triggerBtn.id === 'add_item' ||
+        (triggerBtn.querySelector && triggerBtn.querySelector('#add_item')) ||
+        (triggerBtn.getAttribute && triggerBtn.getAttribute('data-bs-target') === '#item-modal' && !triggerBtn.classList.contains('edit-btn') && !triggerBtn.classList.contains('copy-btn')) ||
+        (triggerBtn.textContent && triggerBtn.textContent.includes('Add Item'))
+    );
+
+    if (isExplicitAdd || (!isEditingItem && !isCopyingItem)) {
+        resetModal(true);
+    }
+});
+
+document.getElementById('item-modal').addEventListener('hidden.bs.modal', function () {
+    resetModal(true);
+    if (typeof hideHoverIndicators === 'function') {
+        hideHoverIndicators('item');
     }
 });
 
@@ -496,6 +634,8 @@ function createItem(item) {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({ action: "locate" }),
+            }).then(res => {
+                if (res.ok) showToast(`Locating "${item.name}"...`, 'info');
             }).catch((error) => console.error(error));
         });
     }
@@ -505,64 +645,92 @@ function createItem(item) {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ action: "locate" }),
+        }).then(res => {
+            if (res.ok) showToast(`Locating "${item.name}"...`, 'info');
         }).catch((error) => console.error(error));
     });
 
-    col.querySelector('.delete-btn').addEventListener('click', () => {
-        const response = confirm(`Are you sure you want to delete ${item.name}?`);
+    col.querySelector('.delete-btn').addEventListener('click', async () => {
+        const confirmed = await showConfirmModal({
+            title: 'Delete Item',
+            message: `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
+            confirmText: 'Delete Item',
+            confirmBtnClass: 'btn-danger'
+        });
+        if (!confirmed) return;
+
         const id = item.id;
         const itemsContainer = document.getElementById('items-container-grid');
-        if (response) {
-            // Delete item from database
-            fetch(`/api/items/${id}`, { method: "DELETE" })
-                .then(() => {
-                    const idx = fetchedItems.findIndex(i => i.id == id);
-                    if (idx !== -1) {
-                        fetchedItems.splice(idx, 1);
-                    }
-                    const col = itemsContainer.querySelector(`div[data-id="${id}"]`);
-                    col.parentNode.removeChild(col);
-                    const deleteTooltip = bootstrap.Tooltip.getInstance(col.querySelector('.delete-btn'));
-                    if (deleteTooltip) {
-                        deleteTooltip.hide();
-                    }
-                    fetchDataAndLoadTags();
-                    if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
-                        drawMapCanvas(currentMapEsp);
-                    }
-                })
-                .catch((error) => console.error(error));
-        }
+        // Delete item from database
+        fetch(`/api/items/${id}`, { method: "DELETE" })
+            .then(() => {
+                const idx = fetchedItems.findIndex(i => i.id == id);
+                if (idx !== -1) {
+                    fetchedItems.splice(idx, 1);
+                }
+                const cardCol = itemsContainer.querySelector(`div[data-id="${id}"]`);
+                if (cardCol) cardCol.parentNode.removeChild(cardCol);
+                const deleteTooltip = bootstrap.Tooltip.getInstance(col.querySelector('.delete-btn'));
+                if (deleteTooltip) {
+                    deleteTooltip.hide();
+                }
+                fetchDataAndLoadTags();
+                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                    drawMapCanvas(currentMapEsp);
+                }
+                showToast(`Item "${item.name}" was deleted.`, 'success');
+            })
+            .catch((error) => {
+                console.error(error);
+                showToast(`Failed to delete "${item.name}".`, 'danger');
+            });
     });
 
     col.querySelector('.copy-btn').addEventListener('click', () => {
+        resetModal(true);
         isCopyingItem = true;
-        removeLocalStorage();
-        $("#item-modal").modal("show");
-        document.getElementById("item_name").value = item.name;
-        document.getElementById("item_url").value = item.link;
-        document.getElementById("item_image").value = item.image;
+        isEditingItem = false;
+        editingItemId = null;
+        editingItemIP = item.ip;
+
+        const modalLabel = document.getElementById("item-modal-label");
+        if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.add_item) ? translation.add_item : "Add Item";
+        const saveBtnLabel = document.getElementById("item_add_btn_label");
+        if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
+
+        document.getElementById("item_name").value = item.name || "";
+        document.getElementById("item_url").value = item.link || "";
+        document.getElementById("item_image").value = item.image || "";
         document.getElementById("item_quantity").value = item.quantity;
         if (document.getElementById("item_min_quantity")) {
             document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
         }
         if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview(item.image);
+            updateItemImagePreview(item.image || '');
         }
-        // Set LED positions for editing
+        // Set LED positions for copying
         const parsedPos = parsePositionsArray(item.position);
         localStorage.setItem('led_positions', JSON.stringify(parsedPos));
         clickedCells = [...parsedPos];
         localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
         localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
-        // Set item tags for editing
+        // Set item tags for copying
+        let itemTagsArray = [];
         if (item.tags) {
-            const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
-            const itemTagsArray = cleanedTags.split(',');
-            localStorage.setItem('item_tags', JSON.stringify(itemTagsArray))
-            tags = itemTagsArray;
-            loadTagsIntoTagify()
+            try {
+                const parsed = JSON.parse(item.tags);
+                if (Array.isArray(parsed)) itemTagsArray = parsed;
+                else if (typeof parsed === 'string') itemTagsArray = [parsed];
+            } catch (e) {
+                const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
+                itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
+            }
         }
+        localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
+        if (typeof loadTagsIntoTagify === 'function') {
+            loadTagsIntoTagify(itemTagsArray);
+        }
+        $("#item-modal").modal("show");
     });
     col.querySelector('.image-edit-btn').addEventListener('click', () => {
         const imageElement = document.getElementById('imageToCrop');
@@ -623,19 +791,26 @@ function createItem(item) {
 
 
     col.querySelector('.edit-btn').addEventListener('click', () => {
-        // Set flag for editing, remove local storage, and show the item modal
+        resetModal(true);
         isEditingItem = true;
-        removeLocalStorage();
-        $("#item-modal").modal("show");
-        document.getElementById("item_name").value = item.name;
-        document.getElementById("item_url").value = item.link;
-        document.getElementById("item_image").value = item.image;
+        isCopyingItem = false;
+        editingItemId = item.id;
+        editingItemIP = item.ip;
+
+        const modalLabel = document.getElementById("item-modal-label");
+        if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.edit_btn_label) ? translation.edit_btn_label : "Edit Item";
+        const saveBtnLabel = document.getElementById("item_add_btn_label");
+        if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.save_btn_label) ? translation.save_btn_label : "Save";
+
+        document.getElementById("item_name").value = item.name || "";
+        document.getElementById("item_url").value = item.link || "";
+        document.getElementById("item_image").value = item.image || "";
         document.getElementById("item_quantity").value = item.quantity;
         if (document.getElementById("item_min_quantity")) {
             document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
         }
         if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview(item.image);
+            updateItemImagePreview(item.image || '');
         }
 
         // Set LED positions for editing
@@ -646,17 +821,23 @@ function createItem(item) {
         localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
 
         // Set item tags for editing
+        let itemTagsArray = [];
         if (item.tags) {
-            const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
-            const itemTagsArray = cleanedTags.split(',');
-            localStorage.setItem('item_tags', JSON.stringify(itemTagsArray))
-            tags = itemTagsArray;
-            loadTagsIntoTagify()
+            try {
+                const parsed = JSON.parse(item.tags);
+                if (Array.isArray(parsed)) itemTagsArray = parsed;
+                else if (typeof parsed === 'string') itemTagsArray = [parsed];
+            } catch (e) {
+                const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
+                itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
+            }
+        }
+        localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
+        if (typeof loadTagsIntoTagify === 'function') {
+            loadTagsIntoTagify(itemTagsArray);
         }
 
-        // Set editing item ID and IP
-        editingItemId = item.id;
-        editingItemIP = item.ip;
+        $("#item-modal").modal("show");
     });
 
     // Elevate z-index of card and grid column when dropdown menu is open
@@ -841,29 +1022,60 @@ function initialiseTooltips() {
     });
 }
 
-function resetModal() {
-    document.getElementById("item_name").value = "";
-    document.getElementById("item_url").value = "";
-    document.getElementById("item_image").value = "";
-    document.getElementById("item_quantity").value = "";
-    if (document.getElementById("item_min_quantity")) {
-        document.getElementById("item_min_quantity").value = "3";
-    }
-    document.getElementById("item_image_upload").value = "";
+function resetModal(skipHide = false) {
+    isEditingItem = false;
+    isCopyingItem = false;
+    editingItemId = null;
+    editingItemIP = null;
+
+    const nameInput = document.getElementById("item_name");
+    if (nameInput) nameInput.value = "";
+    const urlInput = document.getElementById("item_url");
+    if (urlInput) urlInput.value = "";
+    const imgInput = document.getElementById("item_image");
+    if (imgInput) imgInput.value = "";
+    const qtyInput = document.getElementById("item_quantity");
+    if (qtyInput) qtyInput.value = "";
+    const minQtyInput = document.getElementById("item_min_quantity");
+    if (minQtyInput) minQtyInput.value = "3";
+    const uploadInput = document.getElementById("item_image_upload");
+    if (uploadInput) uploadInput.value = "";
+
     if (typeof updateItemImagePreview === 'function') {
         updateItemImagePreview('');
     }
-    document.getElementById("item_tags").value = "";
-    document.getElementById("item-error-alert").classList.add("d-none");
-    document.getElementById("item-error-list").innerHTML = "";
+    const tagsInput = document.getElementById("item_tags");
+    if (tagsInput) tagsInput.value = "";
+    if (typeof tagify !== 'undefined' && tagify && tagify.removeAllTags) {
+        tagify.removeAllTags();
+    }
+    const errorAlert = document.getElementById("item-error-alert");
+    if (errorAlert) errorAlert.classList.add("d-none");
+    const errorList = document.getElementById("item-error-list");
+    if (errorList) errorList.innerHTML = "";
+
+    const modalLabel = document.getElementById("item-modal-label");
+    if (modalLabel) {
+        modalLabel.textContent = (typeof translation !== 'undefined' && translation.add_item) ? translation.add_item : "Add Item";
+    }
+    const saveBtnLabel = document.getElementById("item_add_btn_label");
+    if (saveBtnLabel) {
+        saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
+    }
+
     removeLocalStorage();
     clearAll();
-    const new_item_modal = document.querySelector('#item-modal');
-    const modal = bootstrap.Modal.getInstance(new_item_modal);
-    modal.hide();
-    isEditingItem = false;
-    isCopyingItem = false;
+    clickedCells = [];
 
+    if (!skipHide) {
+        const modalEl = document.getElementById('item-modal');
+        if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const instance = bootstrap.Modal.getInstance(modalEl);
+            if (instance) {
+                instance.hide();
+            }
+        }
+    }
 }
 
 let currentSortMethod = '';
@@ -954,6 +1166,14 @@ function sortItems(sortMethod = currentSortMethod, direction = currentSortDirect
     const modifier = currentSortDirection === 'desc' ? -1 : 1;
 
     const sortedItems = items.sort((a, b) => {
+        if (typeof filterTags !== 'undefined' && filterTags.length > 1 && typeof tagFilterMode !== 'undefined' && tagFilterMode === 'any') {
+            const scoreA = typeof getItemTagMatchScore === 'function' ? getItemTagMatchScore(a) : 0;
+            const scoreB = typeof getItemTagMatchScore === 'function' ? getItemTagMatchScore(b) : 0;
+            if (scoreB !== scoreA) {
+                return scoreB - scoreA;
+            }
+        }
+
         let valA = a.dataset[currentSortMethod] ?? '';
         let valB = b.dataset[currentSortMethod] ?? '';
 
@@ -998,25 +1218,29 @@ const searchInput = document.getElementById("search");
 const searchClearBtn = document.getElementById("search-clear-btn");
 
 function filterItemsBySearch(text) {
-    const itemsContainer = document.getElementById('items-container-grid');
-    if (!itemsContainer) return;
     const searchText = (text || '').toLowerCase().trim();
-    const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
-    let visibleCount = 0;
+    if (typeof applyItemFilters === 'function') {
+        applyItemFilters();
+    } else {
+        const itemsContainer = document.getElementById('items-container-grid');
+        if (!itemsContainer) return;
+        const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
+        let visibleCount = 0;
 
-    items.forEach((item) => {
-        const itemName = (item.dataset["name"] || "").toLowerCase();
-        const itemTags = (item.dataset["tags"] || "").toLowerCase();
-        const itemEsp = (item.dataset["espName"] || "").toLowerCase();
-        if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1) {
-            item.style.display = "flex";
-            visibleCount++;
-        } else {
-            item.style.display = "none";
-        }
-    });
+        items.forEach((item) => {
+            const itemName = (item.dataset["name"] || "").toLowerCase();
+            const itemTags = (item.dataset["tags"] || "").toLowerCase();
+            const itemEsp = (item.dataset["espName"] || "").toLowerCase();
+            if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1) {
+                item.style.display = "flex";
+                visibleCount++;
+            } else {
+                item.style.display = "none";
+            }
+        });
 
-    updateEmptyState(visibleCount, items.length);
+        updateEmptyState(visibleCount, items.length);
+    }
 
     if (searchClearBtn) {
         searchClearBtn.style.display = searchText ? 'inline-flex' : 'none';

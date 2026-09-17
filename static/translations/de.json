@@ -68,5 +68,8 @@
     "copy_item": "Element kopieren",
     "delete_item": "Löschen",
     "crop_image": "Bild zuschneiden",
-    "link_btn_label": "Mehr kaufen"
+    "link_btn_label": "Mehr kaufen",
+    "tag_match_mode": "Übereinstimmung",
+    "tag_match_any": "Beliebig (ODER)",
+    "tag_match_all": "Alle (UND)"
 }
