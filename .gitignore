@@ -203,3 +203,9 @@ $RECYCLE.BIN/
 
 # Active Run directory
 Active_Run/
+
+# AI Agent Configuration & Notes
+AGENTS.md
+GEMINI.md
+agents.md
+gemini.md
