@@ -56,6 +56,10 @@ async function addItem(event) {
     const image = document.getElementById("item_image").value.replace(window.location.href, "");
     let position = localStorage.getItem('led_positions') || '[]';
     let quantity = document.getElementById("item_quantity").value;
+    const minQtyInput = document.getElementById("item_min_quantity");
+    let min_quantity = (minQtyInput && minQtyInput.value !== "" && !isNaN(parseInt(minQtyInput.value, 10)))
+        ? parseInt(minQtyInput.value, 10)
+        : 3;
     const tags = localStorage.getItem('item_tags');
     const selectedEspOption = selectEspDropdown.options[selectEspDropdown.selectedIndex];
 
@@ -73,6 +77,7 @@ async function addItem(event) {
         image,
         position,
         quantity,
+        min_quantity,
         ip,
         tags,
     };
@@ -141,6 +146,22 @@ async function addItem(event) {
 
 
 
+function parsePositionsArray(pos) {
+    if (!pos) return [];
+    if (Array.isArray(pos)) return pos.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (typeof pos === 'string') {
+        try {
+            const parsed = JSON.parse(pos);
+            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n) && n > 0);
+            if (typeof parsed === 'number' && !isNaN(parsed) && parsed > 0) return [parsed];
+        } catch (e) {}
+        const cleaned = pos.replace(/[\[\]\s]/g, '');
+        if (!cleaned) return [];
+        return cleaned.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
+    }
+    return [];
+}
+
 function removeLocalStorage(){
     localStorage.removeItem('led_positions');
     localStorage.removeItem('edit_led_positions');
@@ -153,9 +174,8 @@ function updateOccupiedCells(espIp) {
     fetchedItems.forEach(item => {
         if (item.ip !== espIp) return;
         if (isEditingItem && item.id === editingItemId) return;
-        if (Array.isArray(item.position)) {
-            occupiedCells = occupiedCells.concat(item.position);
-        }
+        const pos = parsePositionsArray(item.position);
+        occupiedCells = occupiedCells.concat(pos);
     });
 }
 
@@ -209,6 +229,11 @@ function populateEspDropdown() {
 document.getElementById('item-modal').addEventListener('show.bs.modal', function () {
     document.getElementById("item-error-alert").classList.add("d-none");
     document.getElementById("item-error-list").innerHTML = "";
+    if (!isEditingItem && !isCopyingItem) {
+        if (typeof updateItemImagePreview === 'function') {
+            updateItemImagePreview('');
+        }
+    }
 });
 
 document.getElementById('item-modal').addEventListener('shown.bs.modal', function () {
@@ -232,7 +257,28 @@ document.getElementById('item_esp_select').addEventListener('change', function (
 
 document.getElementById("save-item-button").addEventListener("click", addItem);
 document.getElementById("cropAndSaveBtn").addEventListener("click", addItem);
+function renderLoadingSkeletons(count = 8) {
+    const itemsContainer = document.getElementById('items-container-grid');
+    if (!itemsContainer) return;
+    itemsContainer.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+        const col = document.createElement('div');
+        col.classList.add('item-col', 'skeleton-col');
+        col.innerHTML = `
+        <div class="card item-card skeleton-card shadow-sm">
+            <div class="skeleton-thumb skeleton-shimmer"></div>
+            <div class="card-body p-2 d-flex flex-column gap-2">
+                <div class="skeleton-line skeleton-shimmer" style="width: 75%;"></div>
+                <div class="skeleton-btn skeleton-shimmer" style="width: 100%;"></div>
+                <div class="skeleton-line skeleton-shimmer mt-auto" style="width: 45%;"></div>
+            </div>
+        </div>`;
+        itemsContainer.appendChild(col);
+    }
+}
+
 function loadItems() {
+    renderLoadingSkeletons();
     fetch("/api/items")
         .then((response) => response.json())
         .then((data) => {
@@ -241,54 +287,111 @@ function loadItems() {
             //generateItemsList();
             generateItemsGrid();
         })
-        .catch((error) => console.error(error));
+        .catch((error) => {
+            console.error(error);
+            updateEmptyState(0, 0);
+        });
+}
 
+// Helper function to get badge styling and text based on quantity and custom min_quantity threshold
+function getStockBadgeConfig(quantity, minQuantity = 3) {
+    const qty = parseInt(quantity, 10) || 0;
+    const threshold = (minQuantity !== undefined && minQuantity !== null && !isNaN(parseInt(minQuantity, 10)))
+        ? parseInt(minQuantity, 10)
+        : 3;
+    if (qty <= 0) {
+        return {
+            cls: 'stock-badge-out',
+            text: 'Out of stock'
+        };
+    } else if (qty <= threshold) {
+        return {
+            cls: 'stock-badge-low',
+            text: `Low: ${qty}`
+        };
+    } else {
+        return {
+            cls: 'stock-badge-normal',
+            text: `${qty} in stock`
+        };
+    }
+}
+
+function formatLocationBadge(positions) {
+    if (!Array.isArray(positions) || positions.length === 0) return '';
+    const count = positions.length;
+    const allBinsText = positions.join(', ');
+    let displayText = '';
+    if (count === 1) {
+        displayText = `Bin #${positions[0]}`;
+    } else if (count === 2) {
+        displayText = `Bins #${positions[0]}, #${positions[1]}`;
+    } else {
+        displayText = `Bins #${positions[0]}, #${positions[1]} (+${count - 2})`;
+    }
+    return `<span class="location-badge" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Bins: ${escapeHtml(allBinsText)}">${escapeHtml(displayText)}</span>`;
 }
 
 // Function to create an HTML element representing an item
 function createItem(item) {
-    // Create a new column element with Bootstrap classes
+    // Create a new column element for fluid CSS grid
     const col = document.createElement('div');
-    col.classList.add('col-8', 'col-sm-5', 'col-md-4', 'col-lg-2', 'mb-1');
+    col.classList.add('item-col');
     // Set dataset attributes to store item information
     col.dataset.id = item.id;
     col.dataset.name = item.name;
     col.dataset.quantity = parseInt(item.quantity, 10);  // Store as numbers
+    item.min_quantity = (item.min_quantity !== undefined && item.min_quantity !== null && item.min_quantity !== '')
+        ? parseInt(item.min_quantity, 10)
+        : 3;
+    col.dataset.minQuantity = item.min_quantity;
     col.dataset.ip = item.ip;
-    if (!Array.isArray(item.position)) {
-        item.position = (item.position || '').replace('[', '').replace(']', '');
-        item.position = item.position.split(',').map(Number).filter(num => !isNaN(num));
-    }
-    col.dataset.position = item.position;
+    item.position = parsePositionsArray(item.position);
+    col.dataset.position = JSON.stringify(item.position);
     col.dataset.tags = item.tags;
+
+    const stockConfig = getStockBadgeConfig(item.quantity, item.min_quantity);
+    const locationBadgeHtml = formatLocationBadge(item.position);
+    const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
+
+    const imageHtml = hasImage
+        ? `<img src="${safeUrl(item.image)}" class="dynamic-img" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('placeholder-img-container'); const icon=document.createElement('i'); icon.setAttribute('data-lucide','package'); icon.className='placeholder-icon'; this.parentElement.appendChild(icon); if(window.lucide) lucide.createIcons();">`
+        : `<i data-lucide="package" class="placeholder-icon"></i>`;
+
+    const placeholderClass = hasImage ? '' : 'placeholder-img-container';
 
     // Set inner HTML for the created column
     col.innerHTML = `
-    <div class="card position-relative">
-        <!-- Image container with tooltip -->
-        <div class="overflow-hidden d-flex justify-content-center">
-            <img src="${safeUrl(item.image)}" class="card-img-top dynamic-img" alt="${escapeHtml(item.name)}">
+    <div class="card item-card position-relative shadow-sm">
+        <!-- Image container with badges -->
+        <div class="card-img-container ${placeholderClass} position-relative">
+            <div class="card-badges-header">
+                ${locationBadgeHtml ? `<div>${locationBadgeHtml}</div>` : '<div></div>'}
+                <span id="stock-badge-${item.id}" class="stock-badge ${stockConfig.cls}">${stockConfig.text}</span>
+            </div>
+            ${imageHtml}
         </div>
 
         <!-- Card body with item details and buttons -->
-        <div class="card-body p-2">
+        <div class="card-body p-2 d-flex flex-column">
             <!-- Link to the item -->
             <a href="${safeUrl(item.link)}" target="_blank" rel="noopener" class="card-title-link">
                 <h5 id="link-btn-${item.id}" class="card-title" data-bs-toggle="tooltip" title="Shop for more">${escapeHtml(item.name)}</h5>
             </a>
 
-            <!-- Buttons for locating, editing, and dropdown menu -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <button class="btn btn-outline-info locate-btn" id="locate-btn-${item.id}" data-bs-toggle="tooltip" title="Locate" data-item-id="${item.id}">
+            <!-- Action buttons: Primary Locate button + Ghost secondary buttons -->
+            <div class="d-flex align-items-center gap-1 mb-2">
+                <button class="btn btn-locate locate-btn flex-grow-1 py-1 px-2 d-flex align-items-center justify-content-center gap-1" id="locate-btn-${item.id}" data-bs-toggle="tooltip" title="Locate in drawer" data-item-id="${item.id}">
                     <span class="icon-n4px"><i data-lucide="lightbulb"></i></span>
+                    <span class="small fw-semibold">Locate</span>
                 </button>
-                <button class="btn btn-outline-primary edit-btn" id="edit-btn-${item.id}" data-bs-toggle="tooltip" title="Edit">
+                <button class="btn btn-outline-secondary btn-card-ghost edit-btn p-1" id="edit-btn-${item.id}" data-bs-toggle="tooltip" title="Edit">
                     <span class="icon-n4px"><i data-lucide="file-edit"></i></span>
                 </button>
 
                 <!-- Dropdown menu trigger -->
                 <div class="dropdown">
-                    <button class="btn btn-outline-secondary" type="button" id="dropdownMenuButton-${item.id}" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">
+                    <button class="btn btn-outline-secondary btn-card-ghost p-1" type="button" id="dropdownMenuButton-${item.id}" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" title="More options">
                         <span class="icon-n4px"><i data-lucide="more-vertical"></i></span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuButton-${item.id}">
@@ -299,23 +402,22 @@ function createItem(item) {
                 </div>
             </div>
 
-            <!-- Quantity control buttons -->
-            <div class="d-flex justify-content-center align-items-center">
-                <button class="btn btn-outline-danger me-auto minus-btn" id="minus-btn-${item.id}" data-bs-toggle="tooltip" title="-1 from stock" data-item-id="${item.id}">
-                    <span class="icon-n4px"><i data-lucide="minus"></i></span>
+            <!-- Modern Stepper Pill with Accessible Touch Targets -->
+            <div class="mt-auto d-flex align-items-center justify-content-between qty-pill-container">
+                <button class="btn btn-outline-danger qty-btn minus-btn" id="minus-btn-${item.id}" data-bs-toggle="tooltip" title="-1 from stock" data-item-id="${item.id}">
+                    &minus;
                 </button>
-                <span id="quantity-${item.id}">${item.quantity}</span>
-                <button class="btn btn-outline-success ms-auto plus-btn" id="plus-btn-${item.id}" data-bs-toggle="tooltip" title="+1 to stock" data-item-id="${item.id}">
-                    <span class="icon-n4px"><i data-lucide="plus"></i></span>
+                <div class="qty-display-wrapper">
+                    <span id="quantity-${item.id}" class="qty-display-val">${item.quantity}</span>
+                    <span class="qty-display-label">pcs</span>
+                </div>
+                <button class="btn btn-outline-success qty-btn plus-btn" id="plus-btn-${item.id}" data-bs-toggle="tooltip" title="+1 to stock" data-item-id="${item.id}">
+                    &plus;
                 </button>
             </div>
         </div>
     </div>`;
-    // vanilla JS
-    var msnry = new Masonry( '.grid', {
-        columnWidth: 200,
-        itemSelector: '.grid-item'
-    });
+
     // Add event listeners for quantity change, locating, deleting, and editing
     col.querySelector('.minus-btn').addEventListener('click', () => {
         handleQuantityChange(item, -1); // Decrease quantity by 1
@@ -325,13 +427,17 @@ function createItem(item) {
         handleQuantityChange(item, 1); // Increase quantity by 1
     });
 
-    col.querySelector('.card-img-top').addEventListener('click', () => {
-        fetch(`/api/items/${item.id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ action: "locate" }),
-        }).catch((error) => console.error(error));
-    });
+    const imgContainer = col.querySelector('.card-img-container');
+    if (imgContainer) {
+        imgContainer.addEventListener('click', (e) => {
+            if (e.target.closest('.stock-badge') || e.target.closest('.location-badge')) return;
+            fetch(`/api/items/${item.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ action: "locate" }),
+            }).catch((error) => console.error(error));
+        });
+    }
 
     col.querySelector('.locate-btn').addEventListener('click', () => {
         fetch(`/api/items/${item.id}`, {
@@ -376,11 +482,18 @@ function createItem(item) {
         document.getElementById("item_url").value = item.link;
         document.getElementById("item_image").value = item.image;
         document.getElementById("item_quantity").value = item.quantity;
+        if (document.getElementById("item_min_quantity")) {
+            document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
+        }
+        if (typeof updateItemImagePreview === 'function') {
+            updateItemImagePreview(item.image);
+        }
         // Set LED positions for editing
-        localStorage.setItem('led_positions', JSON.stringify(item.position))
-        clickedCells = JSON.parse(localStorage.getItem('led_positions'));
-        localStorage.setItem('edit_led_positions', JSON.stringify(item.position))
-        localStorage.setItem('edit_image_path', JSON.stringify(item.image))
+        const parsedPos = parsePositionsArray(item.position);
+        localStorage.setItem('led_positions', JSON.stringify(parsedPos));
+        clickedCells = [...parsedPos];
+        localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
+        localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
         // Set item tags for editing
         if (item.tags) {
             const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
@@ -457,12 +570,19 @@ function createItem(item) {
         document.getElementById("item_url").value = item.link;
         document.getElementById("item_image").value = item.image;
         document.getElementById("item_quantity").value = item.quantity;
+        if (document.getElementById("item_min_quantity")) {
+            document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
+        }
+        if (typeof updateItemImagePreview === 'function') {
+            updateItemImagePreview(item.image);
+        }
 
         // Set LED positions for editing
-        localStorage.setItem('led_positions', JSON.stringify(item.position))
-        clickedCells = JSON.parse(localStorage.getItem('led_positions'));
-        localStorage.setItem('edit_led_positions', JSON.stringify(item.position))
-        localStorage.setItem('edit_image_path', JSON.stringify(item.image))
+        const parsedPos = parsePositionsArray(item.position);
+        localStorage.setItem('led_positions', JSON.stringify(parsedPos));
+        clickedCells = [...parsedPos];
+        localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
+        localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
 
         // Set item tags for editing
         if (item.tags) {
@@ -510,7 +630,7 @@ function handleQuantitySet(item, newQuantity) {
     }
     item.quantity = quantity;
 
-    // Update item card quantity display and data attribute if present in DOM
+    // Update item card quantity display, stock badge and data attribute if present in DOM
     const quantityElement = document.getElementById(`quantity-${itemId}`);
     if (quantityElement) {
         quantityElement.textContent = quantity.toString();
@@ -518,6 +638,12 @@ function handleQuantitySet(item, newQuantity) {
         if (colElement) {
             colElement.dataset.quantity = quantity;
         }
+    }
+    const stockBadge = document.getElementById(`stock-badge-${itemId}`);
+    if (stockBadge) {
+        const badgeConfig = getStockBadgeConfig(quantity, item.min_quantity);
+        stockBadge.className = `stock-badge ${badgeConfig.cls}`;
+        stockBadge.textContent = badgeConfig.text;
     }
 
     // Update stocktaking modal quantity display if currently showing this item
@@ -574,6 +700,47 @@ function handleQuantityChange(item, changeValue) {
 
 
 
+function updateEmptyState(visibleCount, totalCount) {
+    let emptyState = document.getElementById('items-empty-state');
+    const itemsContainer = document.getElementById('items-container-grid');
+    if (!itemsContainer) return;
+
+    if (!emptyState) {
+        emptyState = document.createElement('div');
+        emptyState.id = 'items-empty-state';
+        emptyState.className = 'grid-column-full empty-state-card text-center d-none';
+        emptyState.innerHTML = `
+            <div class="mb-3 text-secondary opacity-75">
+                <i data-lucide="package-search" style="width: 48px; height: 48px; stroke-width: 1.5;"></i>
+            </div>
+            <h5 class="fw-semibold text-body-secondary mb-1" id="empty-state-title">No matching items found</h5>
+            <p class="text-muted small mb-3" id="empty-state-desc">Try adjusting your search terms, changing tag filters, or add a new part.</p>
+            <button type="button" class="btn btn-outline-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#item-modal">
+                <span class="icon-n4px me-1"><i data-lucide="plus"></i></span>
+                <span>Add Item</span>
+            </button>`;
+        itemsContainer.appendChild(emptyState);
+    }
+
+    if (visibleCount === 0) {
+        emptyState.classList.remove('d-none');
+        const titleEl = document.getElementById('empty-state-title');
+        const descEl = document.getElementById('empty-state-desc');
+        if (totalCount === 0) {
+            if (titleEl) titleEl.textContent = "No items in this storage unit";
+            if (descEl) descEl.textContent = "Get started by adding your first part or component to this cabinet.";
+        } else {
+            if (titleEl) titleEl.textContent = "No matching items found";
+            if (descEl) descEl.textContent = "Try adjusting your search terms, clearing tag filters, or add a new part.";
+        }
+        if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
+    } else {
+        emptyState.classList.add('d-none');
+    }
+}
+
 function generateItemsGrid() {
     const itemsContainer = document.getElementById('items-container-grid');
     // Clear previous content in the container if needed
@@ -583,18 +750,25 @@ function generateItemsGrid() {
         itemsContainer.appendChild(col);
     });
 
+    updateEmptyState(fetchedItems.length, fetchedItems.length);
+
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
     initialiseTooltips();
 }
 function findIndexByIP(ip) {
+    if (!ip) return 0;
+    const cleanIp = String(ip).trim().toLowerCase();
     const options = Array.from(selectEspDropdown.options);
     for (let i = 0; i < options.length; i++) {
-        const optionIp = options[i].dataset.espIp.trim().toLowerCase();
-        const optionName = options[i].dataset.espName.trim().toLowerCase();
-        if (optionIp === ip.trim().toLowerCase() || optionName === ip.trim().toLowerCase()) {
-            return i; // Return the index when either the IP or the name matches the selected option value.
+        const optionIp = (options[i].dataset.espIp || '').trim().toLowerCase();
+        const optionName = (options[i].dataset.espName || '').trim().toLowerCase();
+        if (optionIp === cleanIp || optionName === cleanIp) {
+            return i;
         }
     }
-    return 0; // Return -1 if no match is found.
+    return 0;
 }
 
 
@@ -611,7 +785,13 @@ function resetModal() {
     document.getElementById("item_url").value = "";
     document.getElementById("item_image").value = "";
     document.getElementById("item_quantity").value = "";
+    if (document.getElementById("item_min_quantity")) {
+        document.getElementById("item_min_quantity").value = "3";
+    }
     document.getElementById("item_image_upload").value = "";
+    if (typeof updateItemImagePreview === 'function') {
+        updateItemImagePreview('');
+    }
     document.getElementById("item_tags").value = "";
     document.getElementById("item-error-alert").classList.add("d-none");
     document.getElementById("item-error-list").innerHTML = "";
@@ -629,15 +809,9 @@ let currentSortMethod = '';
 let currentSortDirection = 'asc';
 
 function parseItemPosition(val) {
-    if (!val) return [0, 0];
-    if (Array.isArray(val)) return [Number(val[0]) || 0, Number(val[1]) || 0];
-    if (typeof val === 'string') {
-        const cleaned = val.replace(/[\[\]\s]/g, '');
-        if (!cleaned) return [0, 0];
-        const parts = cleaned.split(',').map(Number);
-        return [parts[0] || 0, parts[1] || 0];
-    }
-    return [0, 0];
+    const pos = parsePositionsArray(val);
+    if (pos.length === 0) return [999999, 999999];
+    return [pos[0], pos[1] || 0];
 }
 
 function handleSortClick(sortMethod, event) {
@@ -759,20 +933,67 @@ function sortItems(sortMethod = currentSortMethod, direction = currentSortDirect
 
     updateSortUI();
 }
-document.getElementById("search").addEventListener("input", function (e){
-    const itemsContainer = document.getElementById('items-container-grid');
-    const searchText = e.target.value.toLowerCase();
-    const items = Array.from(itemsContainer.children);
+const searchInput = document.getElementById("search");
+const searchClearBtn = document.getElementById("search-clear-btn");
 
-    Array.from(items).forEach((item) => {
-        const itemName = item.dataset["name"].toLowerCase();
+function filterItemsBySearch(text) {
+    const itemsContainer = document.getElementById('items-container-grid');
+    if (!itemsContainer) return;
+    const searchText = (text || '').toLowerCase().trim();
+    const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
+    let visibleCount = 0;
+
+    items.forEach((item) => {
+        const itemName = (item.dataset["name"] || "").toLowerCase();
         const itemTags = (item.dataset["tags"] || "").toLowerCase();
-        if (itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1) {
+        if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1) {
             item.style.display = "flex";
+            visibleCount++;
         } else {
             item.style.display = "none";
         }
     });
+
+    updateEmptyState(visibleCount, items.length);
+
+    if (searchClearBtn) {
+        searchClearBtn.style.display = searchText ? 'inline-flex' : 'none';
+    }
+}
+
+if (searchInput) {
+    searchInput.addEventListener("input", function (e) {
+        filterItemsBySearch(e.target.value);
+    });
+}
+
+if (searchClearBtn) {
+    searchClearBtn.addEventListener("click", function () {
+        if (searchInput) {
+            searchInput.value = "";
+            filterItemsBySearch("");
+            searchInput.focus();
+        }
+    });
+}
+
+// Global shortcut: press '/' or 'Ctrl+K' / 'Cmd+K' to focus search
+document.addEventListener("keydown", function (e) {
+    if ((e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) ||
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) {
+        e.preventDefault();
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    } else if (e.key === "Escape" && document.activeElement === searchInput) {
+        if (searchInput.value) {
+            searchInput.value = "";
+            filterItemsBySearch("");
+        } else {
+            searchInput.blur();
+        }
+    }
 });
 
 

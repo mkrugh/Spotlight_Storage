@@ -197,3 +197,100 @@ $('#cropImageModal').on('shown.bs.modal', function () {
         initializeCropper(imageElement);
     });
 });
+
+// UI-09: Item Modal Segmented Image Input & Live Preview
+function updateItemImagePreview(imageUrl) {
+    const previewContainer = document.getElementById('item-img-preview-container');
+    const previewTag = document.getElementById('item-img-preview-tag');
+    const placeholder = document.getElementById('item-img-placeholder');
+    const clearBtn = document.getElementById('btn-clear-item-image');
+
+    if (!previewContainer || !previewTag || !placeholder) return;
+
+    if (imageUrl && imageUrl.trim()) {
+        const trimmed = imageUrl.trim();
+        previewTag.onload = function() {
+            previewTag.classList.remove('d-none');
+            placeholder.classList.add('d-none');
+            if (clearBtn) clearBtn.classList.remove('d-none');
+        };
+        previewTag.onerror = function() {
+            previewTag.classList.add('d-none');
+            placeholder.classList.remove('d-none');
+            if (clearBtn) clearBtn.classList.remove('d-none');
+        };
+        previewTag.src = trimmed;
+    } else {
+        previewTag.src = '';
+        previewTag.classList.add('d-none');
+        placeholder.classList.remove('d-none');
+        if (clearBtn) clearBtn.classList.add('d-none');
+    }
+}
+
+function initItemImageUI() {
+    const btnUrlMode = document.getElementById('btn-img-mode-url');
+    const btnUploadMode = document.getElementById('btn-img-mode-upload');
+    const urlGroup = document.getElementById('item-image-url-group');
+    const uploadGroup = document.getElementById('item-image-upload-group');
+    const urlInput = document.getElementById('item_image');
+    const fileInput = document.getElementById('item_image_upload');
+    const clearBtn = document.getElementById('btn-clear-item-image');
+
+    if (btnUrlMode && btnUploadMode) {
+        btnUrlMode.addEventListener('click', () => {
+            btnUrlMode.classList.remove('btn-outline-secondary');
+            btnUrlMode.classList.add('btn-primary');
+            btnUploadMode.classList.remove('btn-primary');
+            btnUploadMode.classList.add('btn-outline-secondary');
+
+            if (urlGroup) urlGroup.classList.remove('d-none');
+            if (uploadGroup) uploadGroup.classList.add('d-none');
+        });
+
+        btnUploadMode.addEventListener('click', () => {
+            btnUploadMode.classList.remove('btn-outline-secondary');
+            btnUploadMode.classList.add('btn-primary');
+            btnUrlMode.classList.remove('btn-primary');
+            btnUrlMode.classList.add('btn-outline-secondary');
+
+            if (uploadGroup) uploadGroup.classList.remove('d-none');
+            if (urlGroup) urlGroup.classList.add('d-none');
+        });
+    }
+
+    if (urlInput) {
+        urlInput.addEventListener('input', () => {
+            updateItemImagePreview(urlInput.value);
+        });
+        urlInput.addEventListener('change', () => {
+            updateItemImagePreview(urlInput.value);
+        });
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    updateItemImagePreview(e.target.result);
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            }
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            if (urlInput) urlInput.value = '';
+            if (fileInput) fileInput.value = '';
+            updateItemImagePreview('');
+        });
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initItemImageUI);
+} else {
+    initItemImageUI();
+}

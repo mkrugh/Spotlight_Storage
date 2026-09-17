@@ -500,14 +500,9 @@ function drawGrid(mode, rows, columns, startX, startY, serpentineDirection) {
     ctx.fill();
 
     if (mode === "item") {
-        if (!isEventListened) {
-
-            canvas.addEventListener('click', function (event) {
-                handleCellClick(event, mode);
-            });
-
-            isEventListened = true;
-        }
+        responsiveCanvas.onclick = function (event) {
+            handleCellClick(event, "item");
+        };
         redrawGrid(rows, columns, "item", startX, startY, serpentineDirection);
     }
 
@@ -517,10 +512,12 @@ function handleCellClick(event, mode) {
     if (activeSections) {
         const canvas = document.getElementById(mode + '-responsive-canvas');
         if (!canvas) return;
-        let rect = canvas.getBoundingClientRect();
-        let offsetX = rect.left + window.scrollX;
-        let x = event.clientX - offsetX;
-        let y = event.clientY - rect.top;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (event.clientX - rect.left) * scaleX;
+        const y = (event.clientY - rect.top) * scaleY;
 
         const normalizedSections = activeSections.map(s => ({
             rows: Math.max(1, parseInt(s.rows) || 1),
@@ -552,6 +549,7 @@ function handleCellClick(event, mode) {
                     clickedCells.splice(cellIndex, 1);
                 }
 
+                localStorage.setItem('led_positions', JSON.stringify(clickedCells));
                 redrawMultiSectionGrid(mode, normalizedSections);
                 return;
             }
@@ -562,56 +560,52 @@ function handleCellClick(event, mode) {
     }
 
     const selectEspDropdown = document.getElementById('item_esp_select');
-    const rows = parseInt(selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-rows"));
-    const columns = parseInt(selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-columns"));
-    let startX = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-start-x").toLowerCase();
-    const startY = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-start-y").toLowerCase();
-    let serpentineDirection = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-serpentine").toLowerCase();
+    if (!selectEspDropdown || selectEspDropdown.selectedIndex < 0) return;
+    const selectedOption = selectEspDropdown.options[selectEspDropdown.selectedIndex];
+    if (!selectedOption) return;
+
+    const rows = parseInt(selectedOption.getAttribute("data-esp-rows")) || 1;
+    const columns = parseInt(selectedOption.getAttribute("data-esp-columns")) || 1;
+    let startX = (selectedOption.getAttribute("data-esp-start-x") || "left").toLowerCase();
+    const startY = (selectedOption.getAttribute("data-esp-start-y") || "top").toLowerCase();
+    let serpentineDirection = (selectedOption.getAttribute("data-esp-serpentine") || "horizontal").toLowerCase();
 
     if (startX == 1) {
         startX = "right";
     }
-    //console.log("Processed StartX:", startX);  // Debugging processed startX
     if (serpentineDirection == 1) {
-        serpentineDirection =  "vertical";
+        serpentineDirection = "vertical";
     }
 
     const canvas = document.getElementById(mode + '-responsive-canvas');
-    const canvasContainer = document.getElementById(mode + '-canvas-container');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
+
     let lineWidth = 2;
     let boxSize = (canvas.width - lineWidth) / columns;
     if (boxSize <= 60) {
         boxSize = 60;
     }
 
-    // Get the size and position of the canvas
-    let rect = canvas.getBoundingClientRect();
-
-    // Calculate the x and y coordinates of the click relative to the canvas
-    let offsetX = rect.left + window.scrollX;  // Ensure offsetX accounts for window scroll
-    let x = event.clientX - offsetX;
-    let y = event.clientY - rect.top ;
-
-    //console.log("Click coordinates relative to canvas - X:", x, "Y:", y);  // Debugging click coordinates
-
-    // Calculate which row and column was clicked based on the click coordinates
-    let clickedRow = Math.floor(y / boxSize);
-    let clickedColumn = Math.floor(x / boxSize);
-
-    //console.log("ClickedRow:", clickedRow, "ClickedColumn:", clickedColumn);  // Debugging clicked row and column
+    let clickedRow = Math.min(rows - 1, Math.max(0, Math.floor(y / boxSize)));
+    let clickedColumn = Math.min(columns - 1, Math.max(0, Math.floor(x / boxSize)));
 
     const ledNumber = calculateLedNumber(clickedRow, clickedColumn, startX, startY, serpentineDirection, rows, columns);
 
-    // Find if the clicked cell is already in the clickedCells array
     let cellIndex = clickedCells.indexOf(ledNumber);
-
-    // If the clicked cell is not in the array, add it; otherwise, remove it
     if (cellIndex === -1) {
         clickedCells.push(ledNumber);
     } else {
         clickedCells.splice(cellIndex, 1);
     }
 
+    localStorage.setItem('led_positions', JSON.stringify(clickedCells));
     redrawGrid(rows, columns, "item", startX, startY, serpentineDirection);
 }
 
@@ -735,29 +729,27 @@ function clearAll() {
     }
 
     const selectEspDropdown = document.getElementById('item_esp_select');
-    const rows = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-rows");
-    const columns = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-columns");
-    let startX = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-start-x").toLowerCase();
-    const startY = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-start-y").toLowerCase();
-    let serpentineDirection = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-serpentine").toLowerCase();
+    if (!selectEspDropdown || selectEspDropdown.selectedIndex < 0) return;
+    const selectedOption = selectEspDropdown.options[selectEspDropdown.selectedIndex];
+    if (!selectedOption) return;
+
+    const rows = parseInt(selectedOption.getAttribute("data-esp-rows")) || 1;
+    const columns = parseInt(selectedOption.getAttribute("data-esp-columns")) || 1;
+    let startX = (selectedOption.getAttribute("data-esp-start-x") || "left").toLowerCase();
+    const startY = (selectedOption.getAttribute("data-esp-start-y") || "top").toLowerCase();
+    let serpentineDirection = (selectedOption.getAttribute("data-esp-serpentine") || "horizontal").toLowerCase();
     if (startX == 1) {
         startX = "right";
     }
     if (serpentineDirection == 1) {
-        serpentineDirection =  "vertical";
+        serpentineDirection = "vertical";
     }
     redrawGrid(parseInt(rows), parseInt(columns), "item", startX, startY, serpentineDirection);
 }
 
 function submitLights() {
-    localStorage.removeItem('led_positions');
-    // Retrieve existing LED positions from localStorage
-    let savedData = JSON.parse(localStorage.getItem('led_positions')) || [];
-
-    // Save LED positions to localStorage
-    savedData = savedData.concat(clickedCells.sort());
-    // Save updated data back to localStorage
-    localStorage.setItem('led_positions', JSON.stringify(savedData));
+    const sortedCells = [...clickedCells].map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    localStorage.setItem('led_positions', JSON.stringify(sortedCells));
 }
 
 document.getElementById('test_led_button').addEventListener('click',TestLights);

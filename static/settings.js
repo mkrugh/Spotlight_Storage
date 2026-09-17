@@ -64,11 +64,29 @@ function loadSettings() {
             // Update input fields with the retrieved settings
             document.getElementById("settings_brightness").value = settings.brightness;
             document.getElementById("settings_timeout").value = settings.timeout;
-            // Ensure colors is an array and update the color inputs
+            const brightnessDisplay = document.getElementById('brightness-display');
+            if (brightnessDisplay) brightnessDisplay.textContent = settings.brightness + "%";
+            const timeoutDisplay = document.getElementById('timeout-display');
+            if (timeoutDisplay) {
+                if (settings.timeout < 1) {
+                    timeoutDisplay.textContent = "Off";
+                } else {
+                    const mins = Math.floor(settings.timeout / 60);
+                    const secs = settings.timeout % 60;
+                    timeoutDisplay.textContent = mins + "m " + secs + "s";
+                }
+            }
 
+            // Ensure colors is an array and update the color inputs
             const colors = Array.isArray(settings.colors) ? settings.colors : JSON.parse(settings.colors);
-            document.getElementById("color-standby").value = colors[0];
-            document.getElementById("color-locate").value = colors[1];
+            const standbyColor = colors[0] || '#f0f0f0';
+            const locateColor = colors[1] || '#00ff00';
+
+            document.getElementById("color-standby").value = standbyColor;
+            document.getElementById("color-locate").value = locateColor;
+            updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', standbyColor);
+            updateColorDisplay('color-locate', 'picked-color-locate', 'preview-color-locate', locateColor);
+
             lightMode = settings.lightMode;
             language = settings.language;
             loadAvailableLanguages();
@@ -111,24 +129,72 @@ scrollToTop.forEach(function (scrollToTop) {
     });
 });
 
-// colorPicker.js
-
-function updateColor(inputId, spanId) {
-    const input = document.getElementById(inputId);
+// Color swatch synchronization and picker dismissal
+function updateColorDisplay(inputId, spanId, previewId, colorValue) {
     const span = document.getElementById(spanId);
+    if (span) span.textContent = colorValue;
+    const preview = document.getElementById(previewId);
+    if (preview) preview.style.backgroundColor = colorValue;
+}
+
+function updateColor(inputId, spanId, previewId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
     const color = input.value;
-    console.log(color);
-    span.textContent = color;
-    input.style.color = color;
+    updateColorDisplay(inputId, spanId, previewId, color);
     addSettings();
 }
 
-document.getElementById("color-standby").addEventListener('change', function () {
-    updateColor('color-standby', 'picked-color-standby')
+function dismissColorPickers() {
+    const colorInputs = document.querySelectorAll('#offcanvasSettings input[type="color"]');
+    colorInputs.forEach(input => {
+        input.blur();
+    });
+}
+
+const standbyColorInput = document.getElementById("color-standby");
+const locateColorInput = document.getElementById("color-locate");
+
+if (standbyColorInput) {
+    standbyColorInput.addEventListener('focus', function () {
+        if (locateColorInput) locateColorInput.blur();
+    });
+    standbyColorInput.addEventListener('input', function () {
+        updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', this.value);
+    });
+    standbyColorInput.addEventListener('change', function () {
+        updateColor('color-standby', 'picked-color-standby', 'preview-color-standby');
+        this.blur();
+    });
+}
+
+if (locateColorInput) {
+    locateColorInput.addEventListener('focus', function () {
+        if (standbyColorInput) standbyColorInput.blur();
+    });
+    locateColorInput.addEventListener('input', function () {
+        updateColorDisplay('color-locate', 'picked-color-locate', 'preview-color-locate', this.value);
+    });
+    locateColorInput.addEventListener('change', function () {
+        updateColor('color-locate', 'picked-color-locate', 'preview-color-locate');
+        this.blur();
+    });
+}
+
+if (myOffcanvas) {
+    myOffcanvas.addEventListener('hide.bs.offcanvas', dismissColorPickers);
+    myOffcanvas.addEventListener('hidden.bs.offcanvas', dismissColorPickers);
+}
+
+// Dismiss color pickers when interacting with other settings or clicking outside color cards
+document.addEventListener('pointerdown', function (e) {
+    if (!e.target.closest('.settings-color-card')) {
+        dismissColorPickers();
+    }
 });
-document.getElementById("color-locate").addEventListener('change', function () {
-    updateColor('color-locate', 'picked-color-locate')
-});
+
+document.addEventListener('show.bs.modal', dismissColorPickers);
+
 
 
 
@@ -229,17 +295,57 @@ document.getElementById("inventur").addEventListener("click", function () {
     }
 
     function displayItem(index) {
+        const progressText = document.getElementById('inventur-progress-text');
+        const progressBar = document.getElementById('inventur-progress-bar');
+        const placeholder = document.getElementById('inventur-placeholder');
+
         if (!itemsData || itemsData.length === 0) {
             text.textContent = "No items available";
             setAmountDisplay(0);
             img.src = "";
+            img.classList.add('d-none');
+            if (placeholder) placeholder.classList.remove('d-none');
+            if (progressText) progressText.textContent = 'Item 0 of 0';
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.setAttribute('aria-valuenow', 0);
+            }
             return;
         }
+
         const currentItem = itemsData[index];
         if (!currentItem) return;
+
+        if (progressText) progressText.textContent = `Item ${index + 1} of ${itemsData.length}`;
+        if (progressBar) {
+            const percent = Math.round(((index + 1) / itemsData.length) * 100);
+            progressBar.style.width = `${percent}%`;
+            progressBar.setAttribute('aria-valuenow', percent);
+        }
+
         text.textContent = currentItem.name;
         setAmountDisplay(currentItem.quantity);
-        img.src = currentItem.image;
+
+        if (currentItem.image && currentItem.image.trim() !== '') {
+            img.onload = function () {
+                img.classList.remove('d-none');
+                if (placeholder) placeholder.classList.add('d-none');
+            };
+            img.onerror = function () {
+                img.classList.add('d-none');
+                if (placeholder) placeholder.classList.remove('d-none');
+            };
+            img.src = currentItem.image;
+        } else {
+            img.src = '';
+            img.classList.add('d-none');
+            if (placeholder) placeholder.classList.remove('d-none');
+        }
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+
         fetch(`/api/items/${currentItem.id}`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -300,12 +406,22 @@ document.getElementById("inventur").addEventListener("click", function () {
         document.getElementById("item_url").value = currentItem.link;
         document.getElementById("item_image").value = currentItem.image;
         document.getElementById("item_quantity").value = currentItem.quantity;
+        const minQtyEl = document.getElementById("item_min_quantity");
+        if (minQtyEl) {
+            minQtyEl.value = (currentItem.min_quantity !== undefined && currentItem.min_quantity !== null) ? currentItem.min_quantity : 3;
+        }
+        if (typeof updateItemImagePreview === 'function') {
+            updateItemImagePreview(currentItem.image);
+        }
 
         // Set LED positions for editing
-        localStorage.setItem('led_positions', JSON.stringify(currentItem.position));
-        clickedCells = JSON.parse(localStorage.getItem('led_positions'));
-        localStorage.setItem('edit_led_positions', JSON.stringify(currentItem.position));
-        localStorage.setItem('edit_image_path', JSON.stringify(currentItem.image));
+        const parsedPos = (typeof parsePositionsArray === 'function')
+            ? parsePositionsArray(currentItem.position)
+            : (Array.isArray(currentItem.position) ? currentItem.position : JSON.parse(currentItem.position || '[]'));
+        localStorage.setItem('led_positions', JSON.stringify(parsedPos));
+        clickedCells = [...parsedPos];
+        localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
+        localStorage.setItem('edit_image_path', JSON.stringify(currentItem.image || ''));
 
         // Set item tags for editing
         if (currentItem.tags) {

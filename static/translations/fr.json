@@ -16,6 +16,7 @@
     "language_label": "Langue",
     "item_url_label": "URL de l'article",
     "item_quantity_label": "Quantité de l'article",
+    "item_min_quantity_label": "Alerte stock faible (≤)",
     "item_imageUrl_label": "URL de l'image de l'article",
     "item_imageUplad_label": "Téléchargement de l'image de l'article",
     "item_tag_label": "Tags",

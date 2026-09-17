@@ -106,6 +106,9 @@
                     document.getElementById('item-modal-label').textContent = translation.add_item;
                     document.getElementById('item_url_label').textContent = translation.item_url_label; 
                     document.getElementById('item_quantity_label').textContent = translation.item_quantity_label;  
+                    if (document.getElementById('item_min_quantity_label') && translation.item_min_quantity_label) {
+                        document.getElementById('item_min_quantity_label').textContent = translation.item_min_quantity_label;
+                    }
                     document.getElementById('item_imageUrl_label').textContent = translation.item_imageUrl_label;  
                     document.getElementById('item_imageUplad_label').textContent = translation.item_imageUplad_label;
                     document.getElementById('item_tag_label').textContent = translation.item_tag_label;

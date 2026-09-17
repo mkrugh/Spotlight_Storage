@@ -16,6 +16,7 @@
     "language_label": "Kieli",
     "item_url_label": "Esineen URL",
     "item_quantity_label": "Esineen määrä",
+    "item_min_quantity_label": "Vähäisen varaston hälytys (≤)",
     "item_imageUrl_label": "Esineen kuvan URL",
     "item_imageUplad_label": "Esineen kuvan lataus",
     "item_tag_label": "tunnisteet",

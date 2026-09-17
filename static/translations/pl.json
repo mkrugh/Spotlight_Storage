@@ -16,6 +16,7 @@
     "language_label": "Język",
     "item_url_label": "URL przedmiotu",
     "item_quantity_label": "Ilość przedmiotów",
+    "item_min_quantity_label": "Niski stan magazynowy (≤)",
     "item_imageUrl_label": "URL obrazu przedmiotu",
     "item_imageUplad_label": "Prześlij obraz przedmiotu",
     "item_tag_label": "Tagi",

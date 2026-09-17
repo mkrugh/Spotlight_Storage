@@ -19,6 +19,7 @@ class TestApiItems:
             'image': '',
             'position': '[1]',
             'quantity': 5,
+            'min_quantity': 2,
             'ip': '192.168.1.100',
             'tags': '["mcu"]'
         }
@@ -27,6 +28,7 @@ class TestApiItems:
         data = response.get_json()
         assert 'id' in data
         assert data['name'] == 'Arduino Nano'
+        assert data['min_quantity'] == 2
 
     def test_create_item_missing_name(self, client):
         response = client.post('/api/items', json={'quantity': 5})
@@ -34,20 +36,21 @@ class TestApiItems:
         assert 'error' in response.get_json()
 
     def test_get_single_item(self, client):
-        # Create item
+        # Create item with default min_quantity
         post_res = client.post('/api/items', json={'name': 'Relay 5V', 'quantity': 2})
         item_id = post_res.get_json()['id']
 
         response = client.get(f'/api/items/{item_id}')
         assert response.status_code == 200
         assert response.get_json()['name'] == 'Relay 5V'
+        assert response.get_json()['min_quantity'] == 3
 
     def test_get_nonexistent_item_404(self, client):
         response = client.get('/api/items/99999')
         assert response.status_code == 404
 
     def test_update_item(self, client):
-        post_res = client.post('/api/items', json={'name': 'Original Name', 'quantity': 1})
+        post_res = client.post('/api/items', json={'name': 'Original Name', 'quantity': 1, 'min_quantity': 3})
         item_id = post_res.get_json()['id']
 
         update_payload = {
@@ -56,12 +59,14 @@ class TestApiItems:
             'image': '',
             'position': '[2]',
             'quantity': 10,
+            'min_quantity': 8,
             'ip': '',
             'tags': ''
         }
         response = client.put(f'/api/items/{item_id}', json=update_payload)
         assert response.status_code == 200
         assert response.get_json()['name'] == 'Modified Name'
+        assert response.get_json()['min_quantity'] == 8
 
     def test_update_item_quantity_header(self, client):
         post_res = client.post('/api/items', json={'name': 'Servo', 'quantity': 3})

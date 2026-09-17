@@ -16,6 +16,7 @@
     "language_label": "Taal",
     "item_url_label": "Item URL",
     "item_quantity_label": "Item Aantal",
+    "item_min_quantity_label": "Lage voorraad waarschuwing (≤)",
     "item_imageUrl_label": "Item Afbeelding URL",
     "item_imageUplad_label": "Item Afbeelding Upload",
     "item_tag_label": "Tags",

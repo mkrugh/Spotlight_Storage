@@ -27,6 +27,7 @@ def create_combined_db():
                 image TEXT,
                 position TEXT,
                 quantity INTEGER,
+                min_quantity INTEGER DEFAULT 3,
                 ip TEXT,
                 tags TEXT 
             )
@@ -101,6 +102,13 @@ def create_combined_db():
         cursor.execute("ALTER TABLE esp ADD COLUMN sections TEXT")
         conn_combined.commit()
 
+    # Check for the existence of 'min_quantity' column in items
+    cursor.execute("PRAGMA table_info(items)")
+    items_columns = [column[1] for column in cursor.fetchall()]
+    if 'min_quantity' not in items_columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN min_quantity INTEGER DEFAULT 3")
+        conn_combined.commit()
+
     return conn_combined
 
 
@@ -115,9 +123,18 @@ def read_items():
 def write_item(item):
     conn = create_combined_db()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO items (name, link, image, position, quantity, ip, tags) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    min_qty = item.get('min_quantity')
+    if min_qty is None or str(min_qty).strip() == '':
+        min_qty = 3
+    else:
+        try:
+            min_qty = int(min_qty)
+        except (ValueError, TypeError):
+            min_qty = 3
+
+    cursor.execute('INSERT INTO items (name, link, image, position, quantity, min_quantity, ip, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                    [item['name'], item.get('link', ''), item.get('image', ''), item.get('position', '[]'),
-                    item.get('quantity', 0), item.get('ip', ''), item.get('tags', '')])
+                    item.get('quantity', 0), min_qty, item.get('ip', ''), item.get('tags', '')])
     lastId = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -143,11 +160,19 @@ def update_item_image(item_id, new_image_url):
 def update_item(id, data):
     conn = create_combined_db()
 
-    try:
+    min_qty = data.get('min_quantity')
+    if min_qty is None or str(min_qty).strip() == '':
+        min_qty = 3
+    else:
+        try:
+            min_qty = int(min_qty)
+        except (ValueError, TypeError):
+            min_qty = 3
 
+    try:
         conn.execute(
-            'UPDATE items SET name = ?, link = ?, image = ?, position = ?, quantity = ?, ip = ?, tags = ? WHERE id = ?',
-            [data['name'], data['link'], data['image'], data['position'], data['quantity'], data['ip'], data['tags'],
+            'UPDATE items SET name = ?, link = ?, image = ?, position = ?, quantity = ?, min_quantity = ?, ip = ?, tags = ? WHERE id = ?',
+            [data['name'], data['link'], data['image'], data['position'], data['quantity'], min_qty, data['ip'], data['tags'],
              id])
         conn.commit()
     except sqlite3.Error as e:

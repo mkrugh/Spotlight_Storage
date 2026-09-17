@@ -12,7 +12,7 @@
 </head>
 <body>
 
-<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark border-bottom border-light">
+<nav class="navbar navbar-expand-md fixed-top app-navbar border-bottom">
     <div class="container-fluid">
 
         <a class="navbar-brand scroll-to-top" href="#">
@@ -58,9 +58,10 @@
                 </li>-->
             </ul>
 
-            <div class="d-flex align-items-center position-relative ms-2 me-0 me-md-2 mb-2 mb-md-0" style="min-width: 130px; max-width: 250px;">
-                <input type="text" class="form-control flex-grow-1" placeholder="Search items..." id="search" style="padding-right: 32px;">
-                <i data-lucide="search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"></i>
+            <div class="d-flex align-items-center search-input-wrapper ms-2 me-0 me-md-2 mb-2 mb-md-0">
+                <input type="text" class="form-control flex-grow-1" placeholder="Search items... (/)" id="search" autocomplete="off">
+                <button type="button" id="search-clear-btn" class="search-clear-btn" title="Clear search" aria-label="Clear search">&times;</button>
+                <i data-lucide="search" class="search-icon-nav"></i>
             </div>
 
 
@@ -114,7 +115,18 @@
             <!-- ESP tabs will be dynamically populated here -->
         </ul>
     </div>
-    <div id="items-container-grid" class="row" style="margin-top: 2rem">
+    <div id="items-container-grid">
+        <div id="items-empty-state" class="grid-column-full empty-state-card text-center d-none">
+            <div class="mb-3 text-secondary opacity-75">
+                <i data-lucide="package-search" style="width: 48px; height: 48px; stroke-width: 1.5;"></i>
+            </div>
+            <h5 class="fw-semibold text-body-secondary mb-1" id="empty-state-title">No matching items found</h5>
+            <p class="text-muted small mb-3" id="empty-state-desc">Try adjusting your search terms, changing tag filters, or add a new part.</p>
+            <button type="button" class="btn btn-outline-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#item-modal">
+                <span class="icon-n4px me-1"><i data-lucide="plus"></i></span>
+                <span>Add Item</span>
+            </button>
+        </div>
     </div>
     <div id="items-container-list"></div>
     <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSettings" aria-labelledby="offcanvasSettingsLabel">
@@ -137,7 +149,7 @@
                         </span>
                         <span id="off_btn_label">Off</span>
                     </button>    
-                    <button id="party-button" class="btn btn-rainbow pe-3">
+                    <button id="party-button" class="btn btn-party pe-3">
                         <span class="icon-n4px">
                             <i data-lucide="party-popper" class="me-2"></i>
                         </span>
@@ -146,25 +158,37 @@
                 </div>
 
                 <div style="display: flex; align-items: center;">
-                    <span id="brightness-title" >Brightness:</span>
-                    <span id="brightness-display" style="margin-left: 5px;">50%</span>
+                    <span id="brightness-title" class="small fw-semibold">Brightness:</span>
+                    <span id="brightness-display" class="badge bg-secondary-subtle text-secondary-emphasis ms-2">50%</span>
                 </div>
-                <input type="range" id="settings_brightness" name="brightness" min="0" max="100" step="1" class="form-range">
+                <input type="range" id="settings_brightness" name="brightness" min="0" max="100" step="1" class="form-range mt-1">
 
-                <div style="display: flex; align-items: center; margin-top: 10px;">
-                    <span id="timeout-title" >Timeout:</span>
-                    <span id="timeout-display" style="margin-left: 5px;">0m 0s</span>
+                <div style="display: flex; align-items: center; margin-top: 12px;">
+                    <span id="timeout-title" class="small fw-semibold">Timeout:</span>
+                    <span id="timeout-display" class="badge bg-secondary-subtle text-secondary-emphasis ms-2">0m 0s</span>
                 </div>
-                <input type="range" id="settings_timeout" name="timeout" min="0" max="300" step="1" class="form-range">
+                <input type="range" id="settings_timeout" name="timeout" min="0" max="300" step="1" class="form-range mt-1">
 
-                <div style="display: flex; align-items: center; margin-top: 10px;">
-                    <span id="locate_led_color_label" >Locate Color:</span>
-                    <input type="color" id="color-locate" name="locate" value="#00ff00" class="form-color" style="margin-left: 0.5rem; width: 2rem; height: 1rem; border: none; padding: 0;">
+                <div class="mb-2 mt-3">
+                    <label class="settings-color-card" for="color-locate">
+                        <span id="locate_led_color_label" class="small fw-semibold">Locate Color</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="color-preview-circle" id="preview-color-locate" style="background-color: #00ff00;"></span>
+                            <code class="color-hex-code" id="picked-color-locate">#00ff00</code>
+                            <input type="color" id="color-locate" name="locate" value="#00ff00" class="visually-hidden">
+                        </div>
+                    </label>
                 </div>
 
-                <div style="display: flex; align-items: center; margin-top: 10px;">
-                    <span id="standby_led_color_label" >Standby Color:</span>
-                    <input type="color" id="color-standby" name="standby" value="#f0f0f0" class="form-color" style="margin-left: 0.5rem; width: 2rem; height: 1rem; border: none; padding: 0;">
+                <div class="mb-2">
+                    <label class="settings-color-card" for="color-standby">
+                        <span id="standby_led_color_label" class="small fw-semibold">Standby Color</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="color-preview-circle" id="preview-color-standby" style="background-color: #f0f0f0;"></span>
+                            <code class="color-hex-code" id="picked-color-standby">#f0f0f0</code>
+                            <input type="color" id="color-standby" name="standby" value="#f0f0f0" class="visually-hidden">
+                        </div>
+                    </label>
                 </div>
 
             </div>
@@ -210,13 +234,13 @@
             </div>
             <hr>
             <div class="row">
-                <h6 id="inventur_label">Inventur</h6>
+                <h6 id="inventur_label">Stocktaking</h6>
                 <div>
                     <button  id="inventur" type="button" class="btn btn-outline-success pe-3">
                         <span class="icon-n4px">
                             <i data-lucide="scroll-text" class="me-2"></i>
                         </span>
-                        <span id="inventur_btn_label">Inventur</span>
+                        <span id="inventur_btn_label">Stocktaking</span>
                     </button>
                 </div>
             </div>
@@ -263,26 +287,49 @@
                         <input type="text" class="form-control" id="item_url" placeholder="URL">
                         <label id="item_url_label" for="item_url">Item URL</label>
                     </div>
-                    <div class="form-floating mb-3">
-                        <input type="number" class="form-control" id="item_quantity" placeholder="1" required>
-                        <label id="item_quantity_label" for="item_quantity">Item quantity</label>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-4 pe-2">
-                            <div class="form mb-3">
-                                <label id="item_imageUrl_label" for="item_image">Item image URL</label>
-                                <input type="url" class="form-control" id="item_image" placeholder="https://placehold.co/150x100">
-
+                    <div class="row g-2 mb-3">
+                        <div class="col-sm-7">
+                            <div class="form-floating">
+                                <input type="number" class="form-control" id="item_quantity" placeholder="1" required>
+                                <label id="item_quantity_label" for="item_quantity">Item quantity</label>
                             </div>
                         </div>
-                        <div class="col-1 text-center or-text">
-                            <span id="or_text">or</span>
+                        <div class="col-sm-5">
+                            <div class="form-floating">
+                                <input type="number" class="form-control" id="item_min_quantity" placeholder="3" min="0" value="3">
+                                <label id="item_min_quantity_label" for="item_min_quantity">Low stock alert (≤)</label>
+                            </div>
                         </div>
-                        <div class="col-7 ps-2">
-                            <div class="form">
-                                <label id="item_imageUplad_label" for="item_image_upload">Upload image file</label>
-                                <input type="file" class="form-control" id="item_image_upload" name="file">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label d-block small fw-medium mb-1.5" id="item_image_section_label">Item Image</label>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Image input method">
+                                <button type="button" class="btn btn-primary" id="btn-img-mode-url">
+                                    <i data-lucide="link" class="me-1"></i><span id="item_imageUrl_label">Image URL</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="btn-img-mode-upload">
+                                    <i data-lucide="upload" class="me-1"></i><span id="item_imageUplad_label">Upload File</span>
+                                </button>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto d-none" id="btn-clear-item-image" title="Remove image">
+                                <i data-lucide="trash-2" class="me-1"></i><span>Clear</span>
+                            </button>
+                        </div>
+                        <div id="item-image-url-group">
+                            <input type="url" class="form-control" id="item_image" placeholder="https://example.com/image.jpg">
+                        </div>
+                        <div id="item-image-upload-group" class="d-none">
+                            <input type="file" class="form-control" id="item_image_upload" name="file" accept="image/*">
+                        </div>
+                        <div class="mt-2">
+                            <div class="item-img-preview-box" id="item-img-preview-container">
+                                <div class="item-img-preview-placeholder" id="item-img-placeholder">
+                                    <i data-lucide="image" style="width: 28px; height: 28px; opacity: 0.5;"></i>
+                                    <span class="small">No image preview</span>
+                                </div>
+                                <img id="item-img-preview-tag" class="d-none" alt="Preview">
                             </div>
                         </div>
                     </div>
@@ -345,9 +392,15 @@
     <div class="modal fade" id="inventur-modal" tabindex="-1" aria-labelledby="inventur-modal-label" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h1 id="inventur_box_label" class="modal-title fs-5" >Inventur</h1>
+                <div class="modal-header d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <h1 id="inventur_box_label" class="modal-title fs-5 mb-0">Stocktaking</h1>
+                        <span id="inventur-progress-text" class="badge bg-secondary-subtle text-secondary-emphasis">Item 0 of 0</span>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="progress" style="height: 3px; border-radius: 0;">
+                    <div id="inventur-progress-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
                 <div class="modal-body text-center">
                     <!-- Display the text of the current item -->
@@ -361,7 +414,13 @@
                             <i data-lucide="plus"></i>
                         </button>
                     </div>
-                    <img id="current-item-img" class="img-fluid rounded mb-4" style="height: 15rem; width: auto; min-width: 10rem; max-width: 50rem;">
+                    <div class="inventur-img-container mb-4">
+                        <div id="inventur-placeholder" class="item-img-preview-placeholder d-none">
+                            <i data-lucide="package" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                            <span class="small text-muted">No Image Available</span>
+                        </div>
+                        <img id="current-item-img" class="img-fluid rounded" alt="Current item">
+                    </div>
                     <!-- Add buttons with better styling -->
                     <div class="d-flex justify-content-center">
                         <button id="edit-btn-inventur" class="btn btn-outline-primary me-2" data-bs-toggle="tooltip" title="Edit">
@@ -589,14 +648,14 @@
                 </div>
                 <div class="modal-body">
                     <div id="map-esp-picker" class="d-none mb-3"></div>
-                    <div class="d-flex gap-3" style="min-height:360px;">
+                    <div class="d-flex gap-3 map-modal-layout" style="min-height:360px;">
                         <div id="map-canvas-container" style="flex:1; overflow:auto;">
                             <canvas id="map-responsive-canvas"></canvas>
                         </div>
                         <div id="map-side-panel" style="width:260px; min-width:220px; border-left:1px solid var(--bs-border-color); padding-left:1rem;">
                             <h6 id="map-items-heading" class="fw-bold mb-2"></h6>
                             <div id="map-items-list">
-                                <p class="text-muted small">Klik op een LED-positie om te zien welke onderdelen hier staan.</p>
+                                <p class="text-muted small">Click any drawer position on the map to inspect stored parts.</p>
                             </div>
                         </div>
                     </div>
@@ -702,7 +761,6 @@
 <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 <link  href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/masonry/4.2.2/masonry.pkgd.min.js"></script>
 
 <script src="../static/images.js"></script>
 <script src="../static/script.js"></script>

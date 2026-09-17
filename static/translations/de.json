@@ -16,6 +16,7 @@
     "language_label": "Sprache",
     "item_url_label": "Artikel URL",
     "item_quantity_label": "Artikel Anzahl",
+    "item_min_quantity_label": "Niedriger Bestand Warnung (≤)",
     "item_imageUrl_label": "Artikel Bild URL",
     "item_imageUplad_label": "Artikel Bild hochladen",
     "item_tag_label": "Stichwörter",

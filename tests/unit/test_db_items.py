@@ -15,6 +15,7 @@ class TestDbItems:
             'image': 'resistor.png',
             'position': '[1, 2]',
             'quantity': 100,
+            'min_quantity': 10,
             'ip': '192.168.1.100',
             'tags': '["resistor", "through-hole"]'
         }
@@ -28,32 +29,42 @@ class TestDbItems:
         assert fetched['id'] == item_id
         assert fetched['name'] == '10k Resistor'
         assert fetched['quantity'] == 100
+        assert fetched['min_quantity'] == 10
         assert fetched['ip'] == '192.168.1.100'
 
+    def test_min_quantity_defaults_to_three(self, isolated_db):
+        item_id = db.write_item({'name': 'Default Min Qty Item', 'quantity': 10})
+        fetched = db.get_item(item_id)
+        assert fetched is not None
+        assert fetched['min_quantity'] == 3
+
     def test_get_item_by_id(self, isolated_db):
-        item_id = db.write_item({'name': 'Capacitor', 'quantity': 50})
+        item_id = db.write_item({'name': 'Capacitor', 'quantity': 50, 'min_quantity': 5})
         fetched = db.get_item(item_id)
         assert fetched is not None
         assert fetched['name'] == 'Capacitor'
         assert fetched['quantity'] == 50
+        assert fetched['min_quantity'] == 5
 
         # Non-existent ID returns None
         assert db.get_item(9999) is None
 
     def test_update_item(self, isolated_db):
-        item_id = db.write_item({'name': 'Old Name', 'quantity': 10})
+        item_id = db.write_item({'name': 'Old Name', 'quantity': 10, 'min_quantity': 3})
         db.update_item(item_id, {
             'name': 'New Name',
             'link': 'https://newlink.com',
             'image': 'new.jpg',
             'position': '[5]',
             'quantity': 25,
+            'min_quantity': 7,
             'ip': '192.168.1.105',
             'tags': '["updated"]'
         })
         updated = db.get_item(item_id)
         assert updated['name'] == 'New Name'
         assert updated['quantity'] == 25
+        assert updated['min_quantity'] == 7
         assert updated['position'] == '[5]'
 
     def test_update_item_quantity(self, isolated_db):

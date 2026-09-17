@@ -75,7 +75,7 @@ function removeAllTags(){
 
 function sortItemsByTag(filter) {
     const itemsContainer = document.getElementById('items-container-grid');
-    const items = Array.from(itemsContainer.children);
+    const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
     if(filter === ""){
         filterTags = [];
     }else{
@@ -87,8 +87,9 @@ function sortItemsByTag(filter) {
         }
     }
     toggleSelectedTag();
+    let visibleCount = 0;
     Array.from(items).forEach((item) => {
-        const itemTags = item.dataset.tags;
+        const itemTags = item.dataset.tags || "";
         const cleanedTags = itemTags.replace(/[\[\]'"`]/g, ''); // Remove square brackets, single quotes, double quotes, and backticks
         const itemTagsArray = cleanedTags.split(',');
         let shouldDisplay = true;
@@ -104,10 +105,15 @@ function sortItemsByTag(filter) {
         }
         if (shouldDisplay) {
             item.style.display = "flex";
+            visibleCount++;
         } else {
             item.style.display = "none";
         }
     });
+
+    if (typeof updateEmptyState === 'function') {
+        updateEmptyState(visibleCount, items.length);
+    }
 
 }
 function createSortMenuItem(text, onClickHandler, count) {

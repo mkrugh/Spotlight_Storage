@@ -301,16 +301,16 @@ function handleMultiSectionMapClick(event, esp, sections, boxHeight, lw) {
 
 function parsePositions(raw) {
     if (!raw) return [];
-    if (Array.isArray(raw)) return raw.map(Number).filter(n => !isNaN(n));
+    if (Array.isArray(raw)) return raw.map(Number).filter(n => !isNaN(n) && n > 0);
     if (typeof raw === 'string') {
         try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n));
-            if (typeof parsed === 'number') return [parsed];
+            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n) && n > 0);
+            if (typeof parsed === 'number' && !isNaN(parsed) && parsed > 0) return [parsed];
         } catch (e) {}
         const cleaned = raw.replace(/[\[\]\s]/g, '');
         if (!cleaned) return [];
-        return cleaned.split(',').map(Number).filter(n => !isNaN(n));
+        return cleaned.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
     }
     return [];
 }
