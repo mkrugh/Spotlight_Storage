@@ -1,5 +1,5 @@
 # Spotlight Storage - The easy way to find your parts
-![Spotlight-stor](https://github.com/user-attachments/assets/65a8ce23-b271-433b-a8d6-596360a2be69)
+![Spotlight Storage](images/Spotligt_Storage-MainPage.png)
 
 ## About this fork
 
