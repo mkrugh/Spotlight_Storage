@@ -1,5 +1,6 @@
 const selectEspDropdown = document.getElementById("item_esp_select");
 let fetchedItems = []; // Define an array to store fetched items
+let fetchedEsps = []; // Store fetched ESP devices
 
 function escapeHtml(str) {
     return String(str ?? '')
@@ -16,6 +17,35 @@ function safeUrl(url) {
         return escapeHtml(str);
     }
     return '#';
+}
+
+// Format external URLs for items so they open external websites rather than localhost relative paths
+function formatItemLink(url) {
+    if (!url) return null;
+    let str = String(url).trim();
+    if (!str || str === '#' || str === 'undefined' || str === 'null') return null;
+
+    // Disallow dangerous schemes (javascript:, vbscript:, data:)
+    if (/^(javascript|data|vbscript):/i.test(str)) {
+        return null;
+    }
+
+    // Standard absolute web protocols
+    if (/^https?:\/\//i.test(str)) {
+        return escapeHtml(str);
+    }
+
+    // Protocol-relative URLs
+    if (str.startsWith('//')) {
+        return escapeHtml('https:' + str);
+    }
+
+    // If it looks like a domain name or URL (e.g. www.amazon.com, digikey.com/product/123)
+    if (str.includes('.') && !str.includes(' ')) {
+        return escapeHtml('https://' + str);
+    }
+
+    return null;
 }
 let isEditingItem = false;
 let isCopyingItem = false;
@@ -179,11 +209,27 @@ function updateOccupiedCells(espIp) {
     });
 }
 
+function getEspName(itemIp) {
+    if (!itemIp) return '';
+    const cleanIp = String(itemIp).trim().toLowerCase();
+    const found = fetchedEsps.find(esp =>
+        (esp.esp_ip && String(esp.esp_ip).trim().toLowerCase() === cleanIp) ||
+        (esp.name && String(esp.name).trim().toLowerCase() === cleanIp)
+    );
+    if (found && found.name) {
+        return found.name;
+    }
+    return itemIp;
+}
+
 function populateEspDropdown() {
     let index = 0;
     selectEspDropdown.innerHTML = "";
     // Fetch ESP devices
     fetch("/api/esp").then((response) => response.json()).then((data) => {
+        if (Array.isArray(data)) {
+            fetchedEsps = data;
+        }
         if (data.length > 0) {
             // Devices found: Populate dropdown and select the first one
             data.forEach((esp) => {
@@ -279,12 +325,13 @@ function renderLoadingSkeletons(count = 8) {
 
 function loadItems() {
     renderLoadingSkeletons();
-    fetch("/api/items")
-        .then((response) => response.json())
-        .then((data) => {
-            // Store fetched items in the array
-            fetchedItems = data;
-            //generateItemsList();
+    Promise.all([
+        fetch("/api/esp").then((res) => res.json()).catch(() => []),
+        fetch("/api/items").then((res) => res.json())
+    ])
+        .then(([esps, items]) => {
+            fetchedEsps = Array.isArray(esps) ? esps : [];
+            fetchedItems = Array.isArray(items) ? items : [];
             generateItemsGrid();
         })
         .catch((error) => {
@@ -346,6 +393,8 @@ function createItem(item) {
         : 3;
     col.dataset.minQuantity = item.min_quantity;
     col.dataset.ip = item.ip;
+    const espName = getEspName(item.ip);
+    col.dataset.espName = espName;
     item.position = parsePositionsArray(item.position);
     col.dataset.position = JSON.stringify(item.position);
     col.dataset.tags = item.tags;
@@ -353,6 +402,14 @@ function createItem(item) {
     const stockConfig = getStockBadgeConfig(item.quantity, item.min_quantity);
     const locationBadgeHtml = formatLocationBadge(item.position);
     const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
+    const itemLink = formatItemLink(item.link);
+    const titleHtml = itemLink
+        ? `<a href="${itemLink}" target="_blank" rel="noopener noreferrer" class="card-title-link mb-1">
+               <h5 id="link-btn-${item.id}" class="card-title mb-0" data-bs-toggle="tooltip" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h5>
+           </a>`
+        : `<div class="card-title-wrapper mb-1">
+               <h5 id="link-btn-${item.id}" class="card-title mb-0" data-bs-toggle="tooltip" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h5>
+           </div>`;
 
     const imageHtml = hasImage
         ? `<img src="${safeUrl(item.image)}" class="dynamic-img" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('placeholder-img-container'); const icon=document.createElement('i'); icon.setAttribute('data-lucide','package'); icon.className='placeholder-icon'; this.parentElement.appendChild(icon); if(window.lucide) lucide.createIcons();">`
@@ -374,10 +431,14 @@ function createItem(item) {
 
         <!-- Card body with item details and buttons -->
         <div class="card-body p-2 d-flex flex-column">
-            <!-- Link to the item -->
-            <a href="${safeUrl(item.link)}" target="_blank" rel="noopener" class="card-title-link">
-                <h5 id="link-btn-${item.id}" class="card-title" data-bs-toggle="tooltip" title="Shop for more">${escapeHtml(item.name)}</h5>
-            </a>
+            <!-- Link to the item (if present) or plain title -->
+            ${titleHtml}
+
+            <!-- Subtle WLED Controller Reference -->
+            <div class="item-esp-meta d-flex align-items-center gap-1 mb-2 text-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="Controller: ${escapeHtml(espName || 'Unassigned')}${item.ip ? ` (${escapeHtml(item.ip)})` : ''}">
+                <i data-lucide="cpu" class="item-esp-icon"></i>
+                <span class="item-esp-name text-truncate">${escapeHtml(espName || 'Unassigned')}</span>
+            </div>
 
             <!-- Action buttons: Primary Locate button + Ghost secondary buttons -->
             <div class="d-flex align-items-center gap-1 mb-2">
@@ -946,7 +1007,8 @@ function filterItemsBySearch(text) {
     items.forEach((item) => {
         const itemName = (item.dataset["name"] || "").toLowerCase();
         const itemTags = (item.dataset["tags"] || "").toLowerCase();
-        if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1) {
+        const itemEsp = (item.dataset["espName"] || "").toLowerCase();
+        if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1) {
             item.style.display = "flex";
             visibleCount++;
         } else {

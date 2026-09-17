@@ -20,12 +20,15 @@
     }
 
     const setTheme = theme => {
-        if (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark')
-        } else {
-            document.documentElement.setAttribute('data-bs-theme', theme)
-        }
+        const isDark = (theme === 'auto')
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+            : (theme === 'dark');
+        const resolvedTheme = isDark ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-bs-theme', resolvedTheme);
+        document.documentElement.style.colorScheme = resolvedTheme;
     }
+
+    window.setAppTheme = setTheme;
 
     setTheme(getPreferredTheme())
 

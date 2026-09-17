@@ -5,6 +5,7 @@
     <title>Spotlight Storage</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
     <link href="https://cdn.jsdelivr.net/npm/@yaireo/tagify/dist/tagify.css" rel="stylesheet" type="text/css"/>
     <link rel="stylesheet" type="text/css" href="../static/overrides.css" media="screen"/>
@@ -169,26 +170,58 @@
                 </div>
                 <input type="range" id="settings_timeout" name="timeout" min="0" max="300" step="1" class="form-range mt-1">
 
-                <div class="mb-2 mt-3">
-                    <label class="settings-color-card" for="color-locate">
+                <div class="mb-2 mt-3 position-relative">
+                    <div class="settings-color-card" id="color-card-locate" role="button" tabindex="0">
                         <span id="locate_led_color_label" class="small fw-semibold">Locate Color</span>
                         <div class="d-flex align-items-center gap-2">
                             <span class="color-preview-circle" id="preview-color-locate" style="background-color: #00ff00;"></span>
                             <code class="color-hex-code" id="picked-color-locate">#00ff00</code>
                             <input type="color" id="color-locate" name="locate" value="#00ff00" class="visually-hidden">
                         </div>
-                    </label>
+                    </div>
                 </div>
 
-                <div class="mb-2">
-                    <label class="settings-color-card" for="color-standby">
+                <div class="mb-2 position-relative">
+                    <div class="settings-color-card" id="color-card-standby" role="button" tabindex="0">
                         <span id="standby_led_color_label" class="small fw-semibold">Standby Color</span>
                         <div class="d-flex align-items-center gap-2">
                             <span class="color-preview-circle" id="preview-color-standby" style="background-color: #f0f0f0;"></span>
                             <code class="color-hex-code" id="picked-color-standby">#f0f0f0</code>
                             <input type="color" id="color-standby" name="standby" value="#f0f0f0" class="visually-hidden">
                         </div>
-                    </label>
+                    </div>
+                </div>
+
+                <!-- Custom Theme-Aware In-Page Color Picker Popover -->
+                <div id="custom-color-picker-popover" class="custom-color-popover shadow-lg d-none" tabindex="-1">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="small fw-bold" id="popover-target-title">Select Color</span>
+                        <button type="button" class="btn-close btn-close-sm" aria-label="Close" id="popover-close-btn"></button>
+                    </div>
+
+                    <!-- 2D Saturation / Value Canvas -->
+                    <div class="picker-sat-val-container mb-2 position-relative" id="picker-sat-val-container">
+                        <canvas id="picker-sat-val-canvas" width="240" height="130"></canvas>
+                        <div id="picker-sat-val-cursor" class="picker-sat-val-cursor"></div>
+                    </div>
+
+                    <!-- Hue Rainbow Slider -->
+                    <div class="mb-2">
+                        <input type="range" id="picker-hue-slider" min="0" max="360" step="1" value="120" class="form-range picker-hue-slider">
+                    </div>
+
+                    <!-- Quick Preset Swatches -->
+                    <div class="picker-presets-container d-flex flex-wrap gap-1.5 mb-2.5" id="picker-presets"></div>
+
+                    <!-- Hex Code Input & Done Button -->
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="picker-preview-bubble" class="color-preview-circle flex-shrink-0" style="width: 26px; height: 26px; background-color: #00ff00;"></span>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text font-monospace text-muted py-0">#</span>
+                            <input type="text" id="picker-hex-input" class="form-control font-monospace text-uppercase" maxlength="6" placeholder="00FF00" value="00FF00">
+                        </div>
+                        <button type="button" id="picker-done-btn" class="btn btn-sm btn-primary px-3">Done</button>
+                    </div>
                 </div>
 
             </div>

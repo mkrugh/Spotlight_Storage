@@ -1,5 +1,18 @@
 :root {
     --bs-border-radius: 0.7rem;
+    color-scheme: light dark;
+}
+
+[data-bs-theme="light"] {
+    color-scheme: light;
+}
+
+[data-bs-theme="dark"] {
+    color-scheme: dark;
+}
+
+input, select, textarea, button, input[type="color"] {
+    color-scheme: inherit;
 }
 
 
@@ -337,10 +350,45 @@ label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: color 0.15s ease;
 }
 
 .card-title-link:hover h5 {
     color: #0891b2;
+}
+
+.card-title-wrapper h5 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--bs-body-color);
+}
+
+.item-esp-meta {
+    font-size: 0.73rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    min-height: 1rem;
+    cursor: default;
+    user-select: none;
+}
+
+.item-esp-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+    opacity: 0.72;
+    flex-shrink: 0;
+}
+
+.item-esp-name {
+    max-width: 100%;
+    color: var(--bs-secondary-color);
+    opacity: 0.88;
 }
 
 .qty-pill-container {
@@ -568,6 +616,104 @@ label {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--bs-secondary-color);
+}
+
+/* Custom Theme-Aware In-Page Color Picker */
+.custom-color-popover {
+    position: absolute;
+    z-index: 1060;
+    width: 275px;
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    padding: 0.85rem;
+    box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.35), 0 4px 12px -2px rgba(0, 0, 0, 0.2);
+    user-select: none;
+}
+
+.picker-sat-val-container {
+    position: relative;
+    width: 100%;
+    height: 130px;
+    border-radius: 0.45rem;
+    overflow: hidden;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+    border: 1px solid var(--bs-border-color-translucent);
+}
+
+.picker-sat-val-container canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.picker-sat-val-cursor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.8), inset 0 0 2px rgba(0, 0, 0, 0.8);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.picker-hue-slider {
+    height: 14px !important;
+    border-radius: 7px !important;
+    background: linear-gradient(to right,
+        #ff0000 0%, #ffff00 17%, #00ff00 33%,
+        #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%) !important;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    cursor: pointer;
+    border: 1px solid var(--bs-border-color-translucent);
+    padding: 0;
+}
+
+.picker-hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.picker-hue-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.picker-preset-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--bs-border-color);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    padding: 0;
+}
+
+.picker-preset-swatch:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+    z-index: 1;
+}
+
+.btn-close-sm {
+    font-size: 0.65rem;
 }
 
 .form-range {

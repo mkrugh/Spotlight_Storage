@@ -60,7 +60,6 @@
                         document.getElementById(`minus-btn-${itemId}`)?.setAttribute('title', translation.minus_btn_label);
                         document.getElementById(`locate-btn-${itemId}`)?.setAttribute('title', translation.locate_btn_label);
                         document.getElementById(`edit-btn-${itemId}`)?.setAttribute('title', translation.edit_btn_label);
-                        document.getElementById(`link-btn-${itemId}`)?.setAttribute('title', translation.link_btn_label);
                     });
 
 
