@@ -1,9 +1,9 @@
 let editingBuildId = null;
 let pendingExecuteBuildId = null;
 
-const buildsListModal = new bootstrap.Modal(document.getElementById('builds-list-modal'));
-const buildEditModal = new bootstrap.Modal(document.getElementById('build-edit-modal'));
-const buildExecuteModal = new bootstrap.Modal(document.getElementById('build-execute-modal'));
+const buildsListModal = { show: () => DialogManager.open('builds-list-modal'), hide: () => DialogManager.close('builds-list-modal') };
+const buildEditModal = { show: () => DialogManager.open('build-edit-modal'), hide: () => DialogManager.close('build-edit-modal') };
+const buildExecuteModal = { show: () => DialogManager.open('build-execute-modal'), hide: () => DialogManager.close('build-execute-modal') };
 
 async function openBuildsModal() {
     try {

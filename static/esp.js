@@ -46,7 +46,9 @@ function populateEspTable() {
                 editButton.dataset.bsEspStartX = esp.start_left;
                 editButton.dataset.bsEspSerpentinedirection = esp.serpentine_direction;
                 editButton.dataset.bsEspSections = esp.sections ? JSON.stringify(esp.sections) : "";
-                editButton.dataset.bsToggle = "modal";
+                editButton.addEventListener("click", () => {
+                    DialogManager.open("esp-modal", editButton);
+                });
                 editButton.innerHTML = '<i data-lucide="file-edit" class="text-primary"></i>';
 
                 // Delete Button
@@ -57,7 +59,9 @@ function populateEspTable() {
                 deleteButton.dataset.bsEspId = esp.id;
                 deleteButton.dataset.bsEspIp = esp.esp_ip;
                 deleteButton.dataset.bsEspName = esp.name;
-                deleteButton.dataset.bsToggle = "modal";
+                deleteButton.addEventListener("click", () => {
+                    DialogManager.open("esp-delete-modal", deleteButton);
+                });
                 deleteButton.innerHTML = '<i data-lucide="trash" class="text-danger"></i>';
 
                 cellActions.appendChild(editButton);
@@ -384,8 +388,7 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
                 populateEspTable();
             }, 500);
             const new_esp_modal = document.querySelector('#esp-modal');
-            const modal = bootstrap.Modal.getInstance(new_esp_modal);
-            modal.hide();
+            DialogManager.close('esp-modal');
         }).catch((error) => console.error(error));
     };
 
@@ -394,11 +397,11 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
     if (existingESP && (espId == null || espId === '')) {
         espId = existingESP.id;
         // Hide the esp-modal
-        const espModal = bootstrap.Modal.getInstance(document.getElementById('esp-modal'));
+        const espModal = { show: () => DialogManager.open('esp-modal'), hide: () => DialogManager.close('esp-modal') };
         espModal.hide();
 
         // Show confirmation modal
-        const confirmationModal = new bootstrap.Modal(document.getElementById('esp-override-modal'));
+        const confirmationModal = { show: () => DialogManager.open('esp-override-modal'), hide: () => DialogManager.close('esp-override-modal') };
         document.getElementById('deviceNameSpan').textContent = existingESP.name;
         document.getElementById('ipAddressSpan').textContent = existingESP.esp_ip;
         confirmationModal.show();
@@ -534,8 +537,7 @@ document.getElementById('confirmDelete').addEventListener('click', function () {
                 populateEspTable();
             }, 500);
             const delete_esp_modal = document.querySelector('#esp-delete-modal');
-            const modal = bootstrap.Modal.getInstance(delete_esp_modal);
-            modal.hide();
+            DialogManager.close('esp-delete-modal');
         }
     }).catch(error => console.error(error));
 });

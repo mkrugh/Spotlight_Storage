@@ -7,7 +7,8 @@ let tagFilterMode = localStorage.getItem('tag_filter_mode') || 'any';
 const tagify = new Tagify(input, {
     whitelist: [],
     dropdown: {
-        enabled: 0
+        enabled: 0,
+        appendTarget: document.getElementById('item-modal') || document.body
     },
     duplicates: false, // Disallow duplicate tags
     maxTags: maxSelectedTags // Set a maximum limit for tags (adjust as needed)

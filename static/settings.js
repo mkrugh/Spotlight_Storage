@@ -556,7 +556,7 @@ document.getElementById("inventur").addEventListener("click", function () {
     // Create an array of objects containing ids and names
     const itemsData = fetchedItems;
     // Function to display current item
-    const confirmationModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('inventur-modal'));
+    const confirmationModal = { show: () => DialogManager.open('inventur-modal'), hide: () => DialogManager.close('inventur-modal') };
     confirmationModal.show();
 
     function setAmountDisplay(qty) {
@@ -738,7 +738,7 @@ document.getElementById("inventur").addEventListener("click", function () {
             loadTagsIntoTagify(itemTagsArray);
         }
 
-        $("#item-modal").modal("show");
+        DialogManager.open('item-modal');
     };
 
     // Handle the "continue" button click

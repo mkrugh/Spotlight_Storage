@@ -6,7 +6,7 @@ let currentSelectedLed = null;
 document.addEventListener('DOMContentLoaded', function () {
     const modalEl = document.getElementById('map-modal');
     if (modalEl) {
-        mapModal = new bootstrap.Modal(modalEl);
+        mapModal = { show: () => DialogManager.open('map-modal'), hide: () => DialogManager.close('map-modal') };
         modalEl.addEventListener('shown.bs.modal', () => { mapModalVisible = true; });
         modalEl.addEventListener('hidden.bs.modal', () => {
             mapModalVisible = false;

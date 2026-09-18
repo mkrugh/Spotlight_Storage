@@ -170,11 +170,13 @@ function resetModalAndCropper(modalElement) {
     modalElement.dataset.itemImage = '';
 
     // Hide the modal
-    const modal = bootstrap.Modal.getInstance(modalElement);
-    if(modal) {
-        modal.hide();
+    if (typeof DialogManager !== 'undefined') {
+        DialogManager.close(modalElement.id);
     } else {
-        modalElement.hide();
+        const modal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? bootstrap.Modal.getInstance(modalElement) : null;
+        if (modal) {
+            modal.hide();
+        }
     }
 }
 

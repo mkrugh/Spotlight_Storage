@@ -1566,10 +1566,7 @@ dialog.app-dialog.modal::backdrop {
     -webkit-backdrop-filter: blur(3px);
 }
 
-/* Fix width for large/small modals */
-dialog.app-dialog.modal .modal-dialog {
-    max-width: 100vw;
-}
+
 
 /* Smooth Entry / Exit Animation for Native Dialogs */
 dialog.app-dialog.modal[open]:not(.legacy-dialog-polyfill) {

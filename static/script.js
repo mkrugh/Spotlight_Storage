@@ -140,7 +140,7 @@ function showConfirmModal({ title = 'Confirm Action', message = 'Are you sure?',
             confirmBtn.className = `btn btn-sm ${confirmBtnClass}`;
         }
 
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const modal = { show: () => DialogManager.open(modalEl.id), hide: () => DialogManager.close(modalEl.id) };
         let resolved = false;
 
         const handleConfirm = () => {
@@ -750,7 +750,7 @@ function createItem(item) {
         if (typeof loadTagsIntoTagify === 'function') {
             loadTagsIntoTagify(itemTagsArray);
         }
-        $("#item-modal").modal("show");
+        DialogManager.open('item-modal');
     });
     col.querySelector('.image-edit-btn').addEventListener('click', () => {
         const imageElement = document.getElementById('imageToCrop');
@@ -793,7 +793,7 @@ function createItem(item) {
                         window.URL.revokeObjectURL(url);
                     });
 
-                    $(cropImageModal).modal("show");
+                    DialogManager.open('cropImageModal');
                 })
                 .catch(error => {
                     console.error('Error fetching image:', error);
@@ -803,7 +803,7 @@ function createItem(item) {
             // Directly use the local image path
             imageElement.src = image;
             downloadButton.style.display = 'none'; // Hide the download button for local images
-            $(cropImageModal).modal("show");
+            DialogManager.open('cropImageModal');
         }
     });
 
@@ -857,7 +857,7 @@ function createItem(item) {
             loadTagsIntoTagify(itemTagsArray);
         }
 
-        $("#item-modal").modal("show");
+        DialogManager.open('item-modal');
     });
 
     // Elevate z-index of card and grid column when dropdown menu is open
@@ -977,7 +977,7 @@ function updateEmptyState(visibleCount, totalCount) {
             </div>
             <h5 class="fw-semibold text-body-secondary mb-1" id="empty-state-title">No matching items found</h5>
             <p class="text-muted small mb-3" id="empty-state-desc">Try adjusting your search terms, changing tag filters, or add a new part.</p>
-            <button type="button" class="btn btn-outline-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#item-modal">
+            <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick="DialogManager.open('item-modal')">
                 <span class="icon-n4px me-1"><i data-lucide="plus"></i></span>
                 <span>Add Item</span>
             </button>`;
@@ -1054,7 +1054,9 @@ function findIndexByIP(ip) {
 function initialiseTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+        const dialogParent = tooltipTriggerEl.closest('dialog.app-dialog');
+        const container = dialogParent ? dialogParent : document.body;
+        return new bootstrap.Tooltip(tooltipTriggerEl, { container: container });
     });
 }
 
@@ -1105,12 +1107,7 @@ function resetModal(skipHide = false) {
 
     if (!skipHide) {
         const modalEl = document.getElementById('item-modal');
-        if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            const instance = bootstrap.Modal.getInstance(modalEl);
-            if (instance) {
-                instance.hide();
-            }
-        }
+        DialogManager.close('item-modal');
     }
 }
 
