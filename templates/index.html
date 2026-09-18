@@ -27,7 +27,7 @@
             <!-- 1. Action Group (Add, Builds, Map) -->
             <ul class="navbar-nav navbar-action-group mb-2 mb-lg-0 d-flex flex-row align-items-center flex-nowrap gap-2">
                 <li class="nav-item">
-                    <button type="button" class="btn btn-outline-success pe-3 text-nowrap d-inline-flex align-items-center" data-bs-toggle="modal" data-bs-target="#item-modal">
+                    <button type="button" class="btn btn-outline-success pe-3 text-nowrap d-inline-flex align-items-center" onclick="DialogManager.open(\'item-modal\')">
                         <span class="icon-n4px me-1">
                             <i data-lucide="plus"></i>
                         </span>
@@ -120,7 +120,7 @@
             </div>
             <h5 class="fw-semibold text-body-secondary mb-1" id="empty-state-title">No matching items found</h5>
             <p class="text-muted small mb-3" id="empty-state-desc">Try adjusting your search terms, changing tag filters, or add a new part.</p>
-            <button type="button" class="btn btn-outline-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#item-modal">
+            <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick="DialogManager.open(\'item-modal\')">
                 <span class="icon-n4px me-1"><i data-lucide="plus"></i></span>
                 <span>Add Item</span>
             </button>
@@ -230,7 +230,7 @@
                     </table>
                 </div>
                 <div>
-                    <button type="button" class="btn btn-outline-success me-0 me-md-2 pe-3" data-bs-toggle="modal" data-bs-target="#esp-modal">
+                    <button type="button" class="btn btn-outline-success me-0 me-md-2 pe-3" onclick="DialogManager.open(\'esp-modal\')">
                         <span class="icon-n4px">
                             <i data-lucide="plus" class="me-2"></i>
                         </span>
@@ -299,18 +299,18 @@
         </div>
     </div>
 
-    <div class="modal fade" id="item-modal" tabindex="-1" aria-labelledby="item-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="item-modal" aria-hidden="true" aria-labelledby="item-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="item-modal-label">Add Item</h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="resetModal()"> </button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close" onclick="resetModal()"> </button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-danger d-none" id="item-error-alert">Please enter values in the follow empty fields:<br><span id="item-error-list"></span>
                     </div>
                     <div class="form-floating mb-3">
-                        <input type="text" class="form-control" id="item_name" placeholder="Name" required>
+                        <input type="text" class="form-control" id="item_name" placeholder="Name" autofocus required>
                         <label id="item_name_label" for="item_name">Item name</label>
                     </div>
                     <div class="form-floating mb-3">
@@ -403,7 +403,7 @@
 
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" id="cancel-item-button" data-bs-dismiss="modal"  onclick="resetModal()">
+                    <button type="button" class="btn btn-secondary pe-3" id="cancel-item-button" data-dialog-dismiss  onclick="resetModal()">
                         <span class="icon-n4px">
                             <i data-lucide="x" class="me-2"></i>
                         </span>
@@ -418,10 +418,10 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
 
-    <div class="modal fade" id="inventur-modal" tabindex="-1" aria-labelledby="inventur-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="inventur-modal" aria-hidden="true" aria-labelledby="inventur-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header d-flex align-items-center justify-content-between">
@@ -429,7 +429,7 @@
                         <h1 id="inventur_box_label" class="modal-title fs-5 mb-0">Stocktaking</h1>
                         <span id="inventur-progress-text" class="badge bg-secondary-subtle text-secondary-emphasis">Item 0 of 0</span>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="progress" style="height: 3px; border-radius: 0;">
                     <div id="inventur-progress-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
@@ -469,14 +469,14 @@
 
                 <div class="modal-footer">
                     <!-- Add a button to continue -->
-                    <button type="button" class="btn btn-secondary pe-3" id="cancel-inventur-button" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" id="cancel-inventur-button" data-dialog-dismiss>
                         <span class="icon-n4px">
                             <i data-lucide="x" class="me-2"></i>
                         </span>
                         <span id="cancel_inventur_btn_label">Cancel</span>
                     </button>
                     <!-- Add a button to save the item -->
-                    <button type="button" class="btn btn-success pe-3" id="save-inventur-button" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-success pe-3" id="save-inventur-button" data-dialog-dismiss>
                         <span class="icon-n4px">
                             <i data-lucide="save" class="me-2"></i>
                         </span>
@@ -485,57 +485,57 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
 
 
 
-    <div class="modal fade" id="esp-override-modal" tabindex="-1" aria-labelledby="espOverrideModalLabel" aria-hidden="true">
+    <dialog class="modal app-dialog" id="esp-override-modal" aria-hidden="true" aria-labelledby="esp-override-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="espOverrideModalLabel">Confirmation</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to override an existing ESP device: <span id="deviceNameSpan"></span> with IP address
                         <span id="ipAddressSpan"></span>?</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-secondary" data-dialog-dismiss>No</button>
                     <button type="button" class="btn btn-danger" id="confirmOverride">Yes</button>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
 
-    <div class="modal fade" id="esp-delete-modal" tabindex="-1" aria-labelledby="espDeleteModalLabel" aria-hidden="true">
+    <dialog class="modal app-dialog" id="esp-delete-modal" aria-hidden="true" aria-labelledby="esp-delete-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="espDeleteModalLabel">Confirmation</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete ESP device <span id="deviceNameSpan"></span> with IP address
                         <span id="ipAddressSpan"></span>?</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-secondary" data-dialog-dismiss>No</button>
                     <button type="button" class="btn btn-danger" id="confirmDelete">Yes</button>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Crop Image Modal -->
-    <div class="modal fade" id="cropImageModal" tabindex="-1" aria-labelledby="cropImageModalLabel" aria-hidden="true">
+    <dialog class="modal app-dialog" id="cropImageModal" aria-hidden="true" aria-labelledby="cropImageModal-label">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="cropImageModalLabel">Crop Image</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="max-height: 40rem; overflow: hidden; padding: 0;">
                     <div class="img-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden;">
@@ -543,22 +543,22 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="cropCancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" id="cropCancel" data-dialog-dismiss>Cancel</button>
                     <button id="download-image-btn" class="btn btn-primary">Download Image</button>
-                    <button type="button" class="btn btn-primary" id="cropAndSaveBtn" data-bs-dismiss="modal">Crop and save</button>
+                    <button type="button" class="btn btn-primary" id="cropAndSaveBtn" data-dialog-dismiss>Crop and save</button>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
 
 
-    <div class="modal fade" id="esp-modal" tabindex="-1" aria-labelledby="esp-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="esp-modal" aria-hidden="true" aria-labelledby="esp-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="esp-modal-label">Add ESP</h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-danger d-none" id="esp-error-alert">Please enter values in the follow empty fields:<br><span id="error-list"></span>
@@ -655,7 +655,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" data-dialog-dismiss>
                         <span class="icon-n4px">
                             <i data-lucide="x" class="me-2"></i>
                         </span>
@@ -670,10 +670,10 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Map modal -->
-    <div class="modal fade" id="map-modal" tabindex="-1" aria-labelledby="map-modal-title" aria-hidden="true">
+    <dialog class="modal app-dialog" id="map-modal" aria-hidden="true" aria-labelledby="map-modal-label">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -700,7 +700,7 @@
                             <span id="map-occupancy-text">0 / 0 drawers occupied (0%)</span>
                         </span>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div id="map-esp-picker" class="d-none mb-3"></div>
@@ -756,27 +756,27 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" data-dialog-dismiss>
                         <span>Close</span>
                     </button>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Builds list modal -->
-    <div class="modal fade" id="builds-list-modal" tabindex="-1" aria-labelledby="builds-list-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="builds-list-modal" aria-hidden="true" aria-labelledby="builds-list-modal-label">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="builds-list-modal-label">Builds</h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div id="builds-list-container"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" data-dialog-dismiss>
                         <span class="icon-n4px"><i data-lucide="x" class="me-2"></i></span>
                         <span>Cancel</span>
                     </button>
@@ -787,15 +787,15 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Build editor modal -->
-    <div class="modal fade" id="build-edit-modal" tabindex="-1" aria-labelledby="build-edit-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="build-edit-modal" aria-hidden="true" aria-labelledby="build-edit-modal-label">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="build-edit-modal-label">Build</h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="form-floating mb-3">
@@ -810,7 +810,7 @@
                     </button>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" data-dialog-dismiss>
                         <span class="icon-n4px"><i data-lucide="x" class="me-2"></i></span>
                         <span>Cancel</span>
                     </button>
@@ -821,15 +821,15 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Build execute confirm modal -->
-    <div class="modal fade" id="build-execute-modal" tabindex="-1" aria-labelledby="build-execute-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="build-execute-modal" aria-hidden="true" aria-labelledby="build-execute-modal-label">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="build-execute-modal-label">Execute Build</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Execute build: <strong id="build-execute-name"></strong>?</p>
@@ -837,7 +837,7 @@
                     <div id="build-execute-warnings" class="alert alert-warning d-none"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary pe-3" data-dialog-dismiss>
                         <span>Cancel</span>
                     </button>
                     <button type="button" class="btn btn-danger pe-3" id="confirm-execute-btn">
@@ -847,26 +847,26 @@
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Generic Theme Confirmation Modal -->
-    <div class="modal fade" id="confirm-action-modal" tabindex="-1" aria-labelledby="confirm-action-modal-label" aria-hidden="true">
+    <dialog class="modal app-dialog" id="confirm-action-modal" aria-hidden="true" aria-labelledby="confirm-action-modal-label">
         <div class="modal-dialog modal-dialog-centered modal-sm">
             <div class="modal-content shadow-lg border">
                 <div class="modal-header border-0 pb-1">
                     <h5 class="modal-title fs-6 fw-bold" id="confirm-action-modal-label">Confirm Action</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body py-2">
                     <p class="mb-0 small text-body-secondary" id="confirm-action-modal-message">Are you sure?</p>
                 </div>
                 <div class="modal-footer border-0 pt-1">
-                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal" id="confirm-action-cancel-btn">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-secondary" data-dialog-dismiss id="confirm-action-cancel-btn">Cancel</button>
                     <button type="button" class="btn btn-sm btn-danger" id="confirm-action-confirm-btn">Confirm</button>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- App Toast Container -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1095;" id="app-toast-container"></div>
@@ -880,7 +880,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 
 <script src="../static/images.js"></script>
-<script src="../static/script.js"></script>
+<script src="../static/dialog-manager.js"></script>
+    <script src="../static/script.js"></script>
 <script src="../static/esp.js"></script>
 <script src="../static/tags.js"></script>
 <script src="../static/settings.js"></script>
@@ -893,6 +894,22 @@
 <script>
     lucide.createIcons();
 </script>
+
+    <!-- Phase 3: Future Hardware Module Blueprint -->
+    <dialog class="modal app-dialog" id="scanner-modal" aria-hidden="true" aria-labelledby="scanner-modal-label">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scanner-modal-label">Hardware Module</h5>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="text-secondary">Ready for ESP32-CAM or Barcode Scanner integration.</p>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
 </body>
 
 </html>
