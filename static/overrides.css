@@ -1476,3 +1476,30 @@ label {
     padding: 0.65rem;
 }
 
+/* ==========================================================================
+   Performance Optimization: Off-screen Content Containment (Phase 1)
+   Safely wrapped for complete backward compatibility with legacy tablets
+   ========================================================================== */
+@supports (content-visibility: auto) {
+    .item-col {
+        content-visibility: auto;
+        contain-intrinsic-size: 350px;
+        contain-intrinsic-size: auto 350px;
+    }
+
+    .item-col:focus-within,
+    .item-col.dropdown-open {
+        content-visibility: visible !important;
+        contain: none !important;
+    }
+}
+
+/* Un-nested print stylesheet override for legacy parser compatibility */
+@media print {
+    .item-col {
+        content-visibility: visible !important;
+        contain: none !important;
+    }
+}
+
+

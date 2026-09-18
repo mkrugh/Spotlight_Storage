@@ -7,7 +7,8 @@ function escapeHtml(str) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Only allow http(s) and relative URLs in generated HTML (blocks javascript: etc.)
@@ -569,7 +570,7 @@ function createItem(item) {
            </div>`;
 
     const imageHtml = hasImage
-        ? `<img src="${safeUrl(item.image)}" class="dynamic-img" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('placeholder-img-container'); const icon=document.createElement('i'); icon.setAttribute('data-lucide','package'); icon.className='placeholder-icon'; this.parentElement.appendChild(icon); if(window.lucide) lucide.createIcons();">`
+        ? `<img src="${safeUrl(item.image)}" class="dynamic-img" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" onerror="this.style.display='none'; this.parentElement.classList.add('placeholder-img-container'); const icon=document.createElement('i'); icon.setAttribute('data-lucide','package'); icon.className='placeholder-icon'; this.parentElement.appendChild(icon); if(window.lucide) lucide.createIcons();">`
         : `<i data-lucide="package" class="placeholder-icon"></i>`;
 
     const placeholderClass = hasImage ? '' : 'placeholder-img-container';

@@ -17,7 +17,7 @@
     <div class="container-fluid">
 
         <a class="navbar-brand scroll-to-top" href="#">
-            <img src="../static/favicon.png" alt="" width="32" height="32" class="d-inline-block align-text-top">
+            <img src="../static/favicon.png" alt="" width="32" height="32" class="d-inline-block align-text-top" fetchpriority="high" decoding="sync">
             Spotlight Storage
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
@@ -359,7 +359,7 @@
                                     <i data-lucide="image" style="width: 28px; height: 28px; opacity: 0.5;"></i>
                                     <span class="small">No image preview</span>
                                 </div>
-                                <img id="item-img-preview-tag" class="d-none" alt="Preview">
+                                <img id="item-img-preview-tag" class="d-none" alt="Preview" decoding="async">
                             </div>
                         </div>
                     </div>
@@ -451,7 +451,7 @@
                             <i data-lucide="package" style="width: 48px; height: 48px; opacity: 0.5;"></i>
                             <span class="small text-muted">No Image Available</span>
                         </div>
-                        <img id="current-item-img" class="img-fluid rounded" alt="Current item">
+                        <img id="current-item-img" class="img-fluid rounded" alt="Current item" decoding="async">
                     </div>
                     <!-- Add buttons with better styling -->
                     <div class="d-flex justify-content-center">

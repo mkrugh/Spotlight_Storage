@@ -384,7 +384,7 @@ function renderDrawerInspector(ledNum, items, esp) {
                         <div class="map-inspector-item-card">
                             <div class="d-flex align-items-start gap-2">
                                 ${item.image
-                                    ? `<img src="${safeUrl(item.image)}" style="width:38px;height:38px;object-fit:cover;flex-shrink:0;" class="rounded border" alt="${escapeHtml(item.name || '')}">`
+                                    ? `<img src="${safeUrl(item.image)}" style="width:38px;height:38px;object-fit:cover;flex-shrink:0;" class="rounded border" alt="${escapeHtml(item.name || '')}" loading="lazy" decoding="async">`
                                     : `<div style="width:38px;height:38px;flex-shrink:0;" class="rounded border bg-secondary-subtle d-flex align-items-center justify-content-center text-muted"><i data-lucide="package" class="icon-n4px"></i></div>`
                                 }
                                 <div class="flex-grow-1 overflow-hidden">
@@ -673,7 +673,7 @@ function renderMapItems(ledNum, items) {
     container.innerHTML = items.map(item => `
         <div class="d-flex align-items-center mb-2 border rounded p-2">
             ${item.image
-                ? `<img src="${safeUrl(item.image)}" style="width:44px;height:44px;object-fit:cover;flex-shrink:0;" class="rounded me-2">`
+                ? `<img src="${safeUrl(item.image)}" style="width:44px;height:44px;object-fit:cover;flex-shrink:0;" class="rounded me-2" alt="${escapeHtml(item.name || '')}" loading="lazy" decoding="async">`
                 : '<div style="width:44px;height:44px;flex-shrink:0;" class="me-2 bg-secondary rounded opacity-25"></div>'}
             <div class="overflow-hidden">
                 <div class="fw-semibold small text-truncate">${escapeHtml(item.name)}</div>
