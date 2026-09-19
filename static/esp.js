@@ -325,9 +325,9 @@ document.getElementById('esp-add-section-btn')?.addEventListener('click', () => 
     drawGrid("esp");
 });
 
-document.getElementById("save-esp-button").addEventListener('click', () => {
+document.getElementById("save-esp-button").addEventListener('click', async () => {
     const saveButton = document.getElementById('save-esp-button');
-    let espId = saveButton.getAttribute('data-bs-esp-id');
+    let espId = saveButton.getAttribute('data-bs-esp-id') || saveButton.dataset.bsEspId;
     const name = document.getElementById("esp_name").value;
     const esp_ip = document.getElementById("esp_ip").value;
 
@@ -386,10 +386,107 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
         }).then((response) => response.json()).then(() => {
             setTimeout(() => {
                 populateEspTable();
+                if (typeof loadItems === 'function') loadItems();
             }, 500);
-            const new_esp_modal = document.querySelector('#esp-modal');
             DialogManager.close('esp-modal');
         }).catch((error) => console.error(error));
+    };
+
+    // Pre-save validation: Check if resizing cabinet will orphan existing parts
+    const checkResizeConflicts = async (targetEspId) => {
+        const idToCheck = targetEspId || espId;
+        if (!idToCheck) return true;
+
+        let currentEsp = ESPs.find(e => String(e.id) === String(idToCheck));
+        if (!currentEsp) {
+            try {
+                const res = await fetch(`/api/esp/${idToCheck}`);
+                if (res.ok) currentEsp = await res.json();
+            } catch (e) {}
+        }
+        if (!currentEsp) return true;
+
+        const newCapacity = sections && sections.length > 0
+            ? sections.reduce((sum, s) => sum + (parseInt(s.rows, 10) || 1) * (parseInt(s.cols, 10) || 1), 0)
+            : (parseInt(rows, 10) || 1) * (parseInt(cols, 10) || 1);
+
+        let oldSections = currentEsp.sections;
+        if (typeof oldSections === 'string') {
+            try { oldSections = JSON.parse(oldSections); } catch(e) { oldSections = null; }
+        }
+        const oldCapacity = oldSections && Array.isArray(oldSections) && oldSections.length > 0
+            ? oldSections.reduce((sum, s) => sum + (parseInt(s.rows, 10) || 1) * (parseInt(s.cols, 10) || 1), 0)
+            : (parseInt(currentEsp.rows, 10) || 1) * (parseInt(currentEsp.cols, 10) || 1);
+
+        let items = [];
+        try {
+            const res = await fetch('/api/items');
+            if (res.ok) items = await res.json();
+        } catch (e) {
+            items = (typeof fetchedItems !== 'undefined' && Array.isArray(fetchedItems)) ? fetchedItems : [];
+        }
+        if (!items || items.length === 0) {
+            if (typeof fetchedItems !== 'undefined' && Array.isArray(fetchedItems)) {
+                items = fetchedItems;
+            }
+        }
+
+        const currentIp = String(currentEsp.esp_ip || '').trim().toLowerCase();
+        const currentName = String(currentEsp.name || '').trim().toLowerCase();
+        const currentIdStr = String(currentEsp.id !== undefined && currentEsp.id !== null ? currentEsp.id : '');
+        const newIp = String(esp_ip || '').trim().toLowerCase();
+        const newName = String(name || '').trim().toLowerCase();
+
+        const parsePositions = (pos) => {
+            if (typeof parsePositionsArray === 'function') return parsePositionsArray(pos);
+            if (typeof window.parsePositionsArray === 'function') return window.parsePositionsArray(pos);
+            if (!pos) return [];
+            if (Array.isArray(pos)) return pos.map(Number).filter(n => !isNaN(n) && n > 0);
+            if (typeof pos === 'string') {
+                try {
+                    const p = JSON.parse(pos);
+                    if (Array.isArray(p)) return p.map(Number).filter(n => !isNaN(n) && n > 0);
+                    if (typeof p === 'number' && !isNaN(p) && p > 0) return [p];
+                } catch(e) {}
+                const cleaned = pos.replace(/[\[\]\s]/g, '');
+                return cleaned ? cleaned.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : [];
+            }
+            return [];
+        };
+
+        const conflicting = items.filter(item => {
+            if (!item || !item.ip) return false;
+            const ip = String(item.ip).trim().toLowerCase();
+            const matches = (
+                (currentIp && ip === currentIp) ||
+                (currentName && ip === currentName) ||
+                (currentIdStr && ip === currentIdStr) ||
+                (newIp && ip === newIp) ||
+                (newName && ip === newName)
+            );
+            if (!matches) return false;
+            const pos = parsePositions(item.position);
+            return pos.some(p => p > newCapacity);
+        });
+
+        if (conflicting.length > 0) {
+            const sample = conflicting.slice(0, 3).map(i => `"${i.name}"`).join(', ');
+            const extra = conflicting.length > 3 ? ` and ${conflicting.length - 3} more` : '';
+            const confirmFn = (typeof showConfirmModal === 'function')
+                ? showConfirmModal
+                : (typeof window.showConfirmModal === 'function' ? window.showConfirmModal : null);
+            if (confirmFn) {
+                return await confirmFn({
+                    title: 'Cabinet Resize Warning',
+                    message: `Reducing capacity from ${oldCapacity} to ${newCapacity} bins will orphan ${conflicting.length} part(s) (${sample}${extra}) whose assigned bins will no longer exist. Do you want to proceed?`,
+                    confirmText: 'Proceed & Save',
+                    confirmBtnClass: 'btn-warning'
+                });
+            } else {
+                return window.confirm(`Cabinet Resize Warning: Reducing capacity from ${oldCapacity} to ${newCapacity} bins will orphan ${conflicting.length} part(s) (${sample}${extra}). Do you want to proceed?`);
+            }
+        }
+        return true;
     };
 
     const existingESP = ESPs.find(esp => esp.name === name || esp.esp_ip === esp_ip || esp.name === esp_ip);
@@ -406,8 +503,11 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
         document.getElementById('ipAddressSpan').textContent = existingESP.esp_ip;
         confirmationModal.show();
 
-        document.getElementById('confirmOverride').addEventListener('click', () => {
-            processESPItem();
+        document.getElementById('confirmOverride').addEventListener('click', async () => {
+            const safe = await checkResizeConflicts(existingESP.id);
+            if (safe) {
+                processESPItem();
+            }
             confirmationModal.hide();
         }, { once: true });
 
@@ -435,6 +535,8 @@ document.getElementById("save-esp-button").addEventListener('click', () => {
             espId = "";
         }, { once: true });
     } else {
+        const safe = await checkResizeConflicts(espId);
+        if (!safe) return;
         processESPItem();
     }
 });

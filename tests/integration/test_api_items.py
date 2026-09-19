@@ -103,3 +103,41 @@ class TestApiItems:
         # Verify deletion
         get_res = client.get(f'/api/items/{item_id}')
         assert get_res.status_code == 404
+
+    def test_locate_item_no_cabinet(self, client):
+        post_res = client.post('/api/items', json={'name': 'Unassigned Cabinet Part', 'position': '[1]', 'ip': ''})
+        item_id = post_res.get_json()['id']
+
+        response = client.post(f'/api/items/{item_id}', data={'action': 'locate'})
+        assert response.status_code == 400
+        assert response.get_json() == {'error': 'No cabinet assigned to this part'}
+
+    def test_locate_item_no_bin(self, client, sample_esp):
+        post_res = client.post('/api/items', json={'name': 'Unassigned Bin Part', 'position': '[]', 'ip': sample_esp['esp_ip']})
+        item_id = post_res.get_json()['id']
+
+        response = client.post(f'/api/items/{item_id}', data={'action': 'locate'})
+        assert response.status_code == 400
+        assert response.get_json() == {'error': 'No bin location assigned to this part'}
+
+    def test_locate_item_nonexistent_cabinet(self, client):
+        post_res = client.post('/api/items', json={'name': 'Missing Cabinet Part', 'position': '[1]', 'ip': 'Nonexistent Cabinet'})
+        item_id = post_res.get_json()['id']
+
+        response = client.post(f'/api/items/{item_id}', data={'action': 'locate'})
+        assert response.status_code == 400
+        assert 'ESP configuration not found' in response.get_json()['error']
+
+    def test_locate_item_success(self, client, sample_esp, monkeypatch):
+        import app as app_module
+        called = []
+        monkeypatch.setattr(app_module, 'set_leds', lambda *args, **kwargs: called.append(True))
+
+        post_res = client.post('/api/items', json={'name': 'Locate Me', 'position': '[1]', 'ip': sample_esp['esp_ip']})
+        item_id = post_res.get_json()['id']
+
+        response = client.post(f'/api/items/{item_id}', data={'action': 'locate'})
+        assert response.status_code == 200
+        assert response.get_json() == {'success': True}
+        assert len(called) == 1
+

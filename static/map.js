@@ -273,6 +273,92 @@ function renderMapGrid(esp) {
     if (occTextEl) {
         occTextEl.textContent = `${occupiedCount} / ${totalDrawers} drawers occupied (${pct}%)`;
     }
+
+    // Check for out-of-bounds / orphaned parts assigned to bins beyond cabinet capacity
+    const orphanBanner = document.getElementById('map-orphan-banner');
+    const orphanBannerText = document.getElementById('map-orphan-banner-text');
+    const orphanViewBtn = document.getElementById('map-orphan-view-btn');
+
+    const orphanedKeys = Object.keys(occupancy).filter(k => {
+        const n = parseInt(k, 10);
+        return !isNaN(n) && n > totalDrawers && occupancy[k] && occupancy[k].length > 0;
+    });
+
+    const orphanedList = [];
+    const seenIds = new Set();
+    orphanedKeys.forEach(k => {
+        const binNum = parseInt(k, 10);
+        (occupancy[k] || []).forEach(item => {
+            const id = item.id || item.name;
+            if (!seenIds.has(id)) {
+                seenIds.add(id);
+                orphanedList.push({ item, invalidBin: binNum });
+            }
+        });
+    });
+
+    if (orphanBanner && orphanBannerText) {
+        if (orphanedList.length > 0) {
+            orphanBannerText.innerHTML = `<strong>${orphanedList.length} part${orphanedList.length > 1 ? 's' : ''}</strong> assigned to bins exceeding cabinet capacity (${totalDrawers} drawers).`;
+            orphanBanner.classList.remove('d-none');
+            if (orphanViewBtn) {
+                orphanViewBtn.onclick = () => renderOrphanInspector(orphanedList, esp, totalDrawers);
+            }
+        } else {
+            orphanBanner.classList.add('d-none');
+        }
+    }
+}
+
+function renderOrphanInspector(orphanedList, esp, totalDrawers) {
+    const container = document.getElementById('map-inspector-content');
+    if (!container) return;
+
+    // Deselect any selected drawer card in the grid
+    const allCards = document.querySelectorAll('#map-drawer-grid-view .map-drawer-card');
+    allCards.forEach(c => c.classList.remove('drawer-selected'));
+    currentSelectedLed = null;
+
+    const itemsHtml = orphanedList.map(({ item, invalidBin }) => {
+        const itemId = item.id;
+        const name = escapeHtml(item.name || 'Unnamed Item');
+        return `
+            <div class="p-2 mb-2 rounded border bg-body-tertiary d-flex flex-column gap-1">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="fw-bold text-truncate" title="${name}">${name}</span>
+                    <span class="badge location-badge-warning">Bin #${invalidBin}</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mt-1">
+                    <span class="small text-danger" style="font-size:0.75rem;">Exceeds limit (${totalDrawers})</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:0.75rem;" onclick="if(window.openAssignPlacement) window.openAssignPlacement('${itemId}')">
+                        Reassign
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="map-inspector-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fw-bold text-warning d-flex align-items-center gap-1">
+                    <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
+                    Out-of-Bounds Parts
+                </span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">${orphanedList.length}</span>
+            </div>
+            <p class="text-muted small mb-2">
+                These parts have positions assigned beyond cabinet "${escapeHtml(esp.name || 'Cabinet')}"'s current capacity (${totalDrawers} drawers).
+            </p>
+            <div class="overflow-auto pe-1" style="max-height: 260px;">
+                ${itemsHtml}
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="if(window.openPlacementDrawer) { if(window.DialogManager) DialogManager.close('map-modal'); window.openPlacementDrawer(); }">
+                Open Placement Drawer
+            </button>
+        </div>
+    `;
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
 }
 
 function createDrawerCardHtml(ledNum, items, isSelected) {

@@ -240,6 +240,33 @@
             </div>
             <hr>
             <div class="row">
+                <h6 id="status_pills_settings_title" class="mb-2">Status Notification Pills</h6>
+                <div class="d-flex flex-column gap-2 mt-1">
+                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0">
+                        <label class="form-check-label d-flex align-items-center gap-2 cursor-pointer mb-0" for="toggle-pill-placement">
+                            <span class="status-indicator-dot placement-indicator-dot"></span>
+                            <span>Needs Placement</span>
+                        </label>
+                        <input class="form-check-input ms-auto cursor-pointer" type="checkbox" role="switch" id="toggle-pill-placement" checked>
+                    </div>
+                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0">
+                        <label class="form-check-label d-flex align-items-center gap-2 cursor-pointer mb-0" for="toggle-pill-out-of-stock">
+                            <span class="status-indicator-dot out-of-stock-indicator-dot"></span>
+                            <span>Out of Stock</span>
+                        </label>
+                        <input class="form-check-input ms-auto cursor-pointer" type="checkbox" role="switch" id="toggle-pill-out-of-stock" checked>
+                    </div>
+                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0">
+                        <label class="form-check-label d-flex align-items-center gap-2 cursor-pointer mb-0" for="toggle-pill-low-stock">
+                            <span class="status-indicator-dot low-stock-indicator-dot"></span>
+                            <span>Low Stock</span>
+                        </label>
+                        <input class="form-check-input ms-auto cursor-pointer" type="checkbox" role="switch" id="toggle-pill-low-stock" checked>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="row">
                 <h6 id="titile">Web Interface</h6>
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-light pe-3" data-bs-theme-value="light">
@@ -706,6 +733,17 @@
                     <div id="map-esp-picker" class="d-none mb-3"></div>
                     <div class="d-flex gap-3 map-modal-layout" style="min-height:420px;">
                         <div id="map-canvas-container" class="position-relative d-flex flex-column justify-content-between" style="flex:1; overflow:auto;">
+                            <!-- Alert Banner for Orphaned Parts (hidden by default) -->
+                            <div id="map-orphan-banner" class="alert alert-warning d-flex align-items-center justify-content-between p-2 mb-2 small d-none" role="alert">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i data-lucide="alert-triangle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+                                    <span id="map-orphan-banner-text"></span>
+                                </div>
+                                <button type="button" class="btn btn-warning btn-sm py-0 px-2 fw-semibold text-nowrap" id="map-orphan-view-btn" style="font-size:0.75rem;">
+                                    View Issues
+                                </button>
+                            </div>
+
                             <!-- Responsive Drawer Cards Container -->
                             <div id="map-drawer-grid-view"></div>
 
@@ -867,6 +905,84 @@
             </div>
         </div>
     </dialog>
+
+    <!-- Floating Inventory Status Pills Container -->
+    <div id="status-pills-container" class="position-fixed bottom-0 start-0 p-3 d-flex flex-wrap gap-2 align-items-center d-none" style="z-index: 1040;">
+        <!-- Needs Placement Pill -->
+        <button type="button" id="placement-pill-btn" class="btn btn-sm btn-outline-secondary bg-body-tertiary rounded-pill shadow-sm d-inline-flex align-items-center gap-2 px-3 py-2 d-none" onclick="if(window.openStatusDrawer) window.openStatusDrawer('placement');" aria-controls="unassigned-drawer" aria-expanded="false" aria-live="polite">
+            <span class="status-indicator-dot placement-indicator-dot"></span>
+            <span id="placement-pill-label">Needs Placement</span>
+            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill" id="placement-pill-count">0</span>
+        </button>
+
+        <!-- Out of Stock Pill -->
+        <button type="button" id="out-of-stock-pill-btn" class="btn btn-sm btn-outline-secondary bg-body-tertiary rounded-pill shadow-sm d-inline-flex align-items-center gap-2 px-3 py-2 d-none" onclick="if(window.openStatusDrawer) window.openStatusDrawer('out_of_stock');" aria-controls="unassigned-drawer" aria-expanded="false" aria-live="polite">
+            <span class="status-indicator-dot out-of-stock-indicator-dot"></span>
+            <span id="out-of-stock-pill-label">Out of Stock</span>
+            <span class="badge bg-danger-subtle text-danger rounded-pill" id="out-of-stock-pill-count">0</span>
+        </button>
+
+        <!-- Low Stock Pill -->
+        <button type="button" id="low-stock-pill-btn" class="btn btn-sm btn-outline-secondary bg-body-tertiary rounded-pill shadow-sm d-inline-flex align-items-center gap-2 px-3 py-2 d-none" onclick="if(window.openStatusDrawer) window.openStatusDrawer('low_stock');" aria-controls="unassigned-drawer" aria-expanded="false" aria-live="polite">
+            <span class="status-indicator-dot low-stock-indicator-dot"></span>
+            <span id="low-stock-pill-label">Low Stock</span>
+            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill" id="low-stock-pill-count">0</span>
+        </button>
+    </div>
+
+    <!-- Inventory Alerts & Placement Bottom Drawer (Offcanvas) -->
+    <div class="offcanvas offcanvas-bottom placement-drawer shadow-lg border-top" tabindex="-1" id="unassigned-drawer" aria-labelledby="unassigned-drawer-label" data-bs-backdrop="true" data-bs-scroll="true">
+        <div class="offcanvas-header py-2 px-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-pills gap-1 drawer-tabs" id="drawer-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active py-1 px-2.5 d-flex align-items-center gap-1.5 small fw-semibold" id="tab-placement-btn" data-bs-toggle="pill" data-bs-target="#tab-placement" type="button" role="tab" aria-controls="tab-placement" aria-selected="true">
+                        <i data-lucide="package-search" class="icon-n4px"></i>
+                        <span>Placement</span>
+                        <span class="badge bg-secondary-subtle text-secondary rounded-pill" id="drawer-placement-count">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2.5 d-flex align-items-center gap-1.5 small fw-semibold" id="tab-out-of-stock-btn" data-bs-toggle="pill" data-bs-target="#tab-out-of-stock" type="button" role="tab" aria-controls="tab-out-of-stock" aria-selected="false">
+                        <i data-lucide="alert-octagon" class="icon-n4px text-danger"></i>
+                        <span>Out of Stock</span>
+                        <span class="badge bg-danger-subtle text-danger rounded-pill" id="drawer-out-count">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-2.5 d-flex align-items-center gap-1.5 small fw-semibold" id="tab-low-stock-btn" data-bs-toggle="pill" data-bs-target="#tab-low-stock" type="button" role="tab" aria-controls="tab-low-stock" aria-selected="false">
+                        <i data-lucide="trending-down" class="icon-n4px text-warning"></i>
+                        <span>Low Stock</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill" id="drawer-low-count">0</span>
+                    </button>
+                </li>
+            </ul>
+
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" id="drawer-filter-grid-btn">
+                    <i data-lucide="filter" class="icon-n4px"></i>
+                    <span id="drawer-filter-btn-text">Filter Grid</span>
+                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="offcanvas-body p-3 custom-scrollbar" id="unassigned-drawer-body">
+            <div class="tab-content" id="drawer-tab-content">
+                <!-- Placement Tab Pane -->
+                <div class="tab-pane fade show active" id="tab-placement" role="tabpanel" aria-labelledby="tab-placement-btn" tabindex="0">
+                    <div id="placement-items-list" class="d-flex flex-column gap-2"></div>
+                </div>
+                <!-- Out of Stock Tab Pane -->
+                <div class="tab-pane fade" id="tab-out-of-stock" role="tabpanel" aria-labelledby="tab-out-of-stock-btn" tabindex="0">
+                    <div id="out-of-stock-items-list" class="d-flex flex-column gap-2"></div>
+                </div>
+                <!-- Low Stock Tab Pane -->
+                <div class="tab-pane fade" id="tab-low-stock" role="tabpanel" aria-labelledby="tab-low-stock-btn" tabindex="0">
+                    <div id="low-stock-items-list" class="d-flex flex-column gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- App Toast Container -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1095;" id="app-toast-container"></div>

@@ -99,10 +99,10 @@ function showToast(message, type = 'info', title = null, duration = 3500) {
         `;
     } else {
         toastEl.innerHTML = `
-            <div class="d-flex align-items-center p-2.5">
-                <div class="me-2.5 d-flex align-items-center">${iconHtml}</div>
-                <div class="toast-body p-0 small flex-grow-1 text-body">${message}</div>
-                <button type="button" class="btn-close btn-close-sm ms-2" data-bs-dismiss="toast" aria-label="Close"></button>
+            <div class="app-toast-content">
+                <div class="d-flex align-items-center flex-shrink-0">${iconHtml}</div>
+                <div class="toast-body small flex-grow-1 text-body">${message}</div>
+                <button type="button" class="btn-close btn-close-sm flex-shrink-0" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
         `;
     }
@@ -165,6 +165,7 @@ function showConfirmModal({ title = 'Confirm Action', message = 'Are you sure?',
         modal.show();
     });
 }
+window.showConfirmModal = showConfirmModal;
 
 
 
@@ -302,6 +303,9 @@ async function addItem(event) {
         isCopyingItem = false;
         removeLocalStorage();
         resetModal();
+        if (typeof updatePlacementHealthUI === 'function') {
+            updatePlacementHealthUI();
+        }
     }
 }
 
@@ -322,6 +326,7 @@ function parsePositionsArray(pos) {
     }
     return [];
 }
+window.parsePositionsArray = parsePositionsArray;
 
 function removeLocalStorage(){
     localStorage.removeItem('led_positions');
@@ -352,6 +357,556 @@ function getEspName(itemIp) {
     }
     return itemIp;
 }
+
+// ---------------------------------------------------
+// Inventory Health Engine (Placement, Low Stock, Out of Stock)
+// ---------------------------------------------------
+let inventoryHealthData = {
+    placementIssues: [],
+    outOfStockItems: [],
+    lowStockItems: [],
+    activeDrawerTab: 'placement',
+    isFiltered: false,
+    activeFilterCategory: null
+};
+
+// Aliased for backward compatibility
+let placementHealthData = {
+    orphaned: [],
+    unassigned: [],
+    allIssues: [],
+    isFiltered: false
+};
+
+function getEspTotalDrawers(esp) {
+    if (!esp) return 0;
+    if (esp.sections && Array.isArray(esp.sections) && esp.sections.length > 0) {
+        return esp.sections.reduce((sum, s) => sum + (parseInt(s.rows, 10) || 1) * (parseInt(s.cols, 10) || 1), 0);
+    }
+    const rows = parseInt(esp.rows, 10) || 1;
+    const cols = parseInt(esp.cols, 10) || 1;
+    return rows * cols;
+}
+
+function findEspForItem(item) {
+    if (!item || !item.ip || !fetchedEsps) return null;
+    const cleanIp = String(item.ip).trim().toLowerCase();
+    return fetchedEsps.find(esp =>
+        (esp.esp_ip && String(esp.esp_ip).trim().toLowerCase() === cleanIp) ||
+        (esp.name && String(esp.name).trim().toLowerCase() === cleanIp) ||
+        (esp.id !== undefined && String(esp.id).trim().toLowerCase() === cleanIp)
+    ) || null;
+}
+
+function computeInventoryHealth(items, esps) {
+    const orphaned = [];
+    const unassigned = [];
+    const outOfStock = [];
+    const lowStock = [];
+
+    (items || []).forEach(item => {
+        // Placement check
+        const positions = parsePositionsArray(item.position);
+        const esp = findEspForItem(item);
+
+        if (!item.ip || String(item.ip).trim() === '') {
+            unassigned.push({
+                item,
+                type: 'no_controller',
+                badgeText: 'No Controller',
+                description: 'No WLED cabinet or controller selected',
+                badgeClass: 'bg-secondary-subtle text-secondary'
+            });
+        } else if (!esp) {
+            unassigned.push({
+                item,
+                type: 'unresolved_controller',
+                badgeText: 'Unknown Cabinet',
+                description: `Assigned controller "${item.ip}" not found`,
+                badgeClass: 'bg-secondary-subtle text-secondary'
+            });
+        } else if (positions.length === 0) {
+            unassigned.push({
+                item,
+                type: 'no_bin',
+                badgeText: 'No Bin',
+                description: `Assigned to "${esp.name || esp.esp_ip}", but no bin chosen`,
+                badgeClass: 'bg-info-subtle text-info-emphasis',
+                esp
+            });
+        } else {
+            const maxDrawers = getEspTotalDrawers(esp);
+            const invalidBins = positions.filter(p => p > maxDrawers || p <= 0);
+            if (invalidBins.length > 0) {
+                orphaned.push({
+                    item,
+                    type: 'orphaned',
+                    badgeText: `Out of Bounds (#${invalidBins.join(', #')})`,
+                    description: `Bin #${invalidBins.join(', #')} exceeds "${esp.name || esp.esp_ip}" capacity (${maxDrawers} bins)`,
+                    badgeClass: 'bg-warning-subtle text-warning-emphasis',
+                    invalidBins,
+                    maxDrawers,
+                    esp
+                });
+            }
+        }
+
+        // Stock checks
+        const qty = parseInt(item.quantity, 10) || 0;
+        const minQty = (item.min_quantity !== undefined && item.min_quantity !== null && !isNaN(parseInt(item.min_quantity, 10)))
+            ? parseInt(item.min_quantity, 10)
+            : 3;
+
+        if (qty <= 0) {
+            outOfStock.push({
+                item,
+                quantity: qty,
+                minQuantity: minQty
+            });
+        } else if (qty <= minQty) {
+            lowStock.push({
+                item,
+                quantity: qty,
+                minQuantity: minQty
+            });
+        }
+    });
+
+    inventoryHealthData.placementIssues = [...orphaned, ...unassigned];
+    inventoryHealthData.outOfStockItems = outOfStock;
+    inventoryHealthData.lowStockItems = lowStock;
+
+    // Backward compatibility
+    placementHealthData.orphaned = orphaned;
+    placementHealthData.unassigned = unassigned;
+    placementHealthData.allIssues = inventoryHealthData.placementIssues;
+
+    return inventoryHealthData;
+}
+
+// Backward compatibility helper
+function computePlacementHealth(items, esps) {
+    computeInventoryHealth(items, esps);
+    return placementHealthData;
+}
+
+function updatePlacementHealthUI() {
+    updateInventoryHealthUI();
+}
+
+function getStatusPillVisibility(type) {
+    try {
+        const stored = localStorage.getItem('status_pill_visibility');
+        if (stored) {
+            const prefs = JSON.parse(stored);
+            if (typeof prefs[type] === 'boolean') {
+                return prefs[type];
+            }
+        }
+    } catch (e) {
+        console.error('Error reading pill visibility preference:', e);
+    }
+    return true; // Default is visible
+}
+
+function setStatusPillVisibility(type, isVisible) {
+    try {
+        let prefs = {};
+        const stored = localStorage.getItem('status_pill_visibility');
+        if (stored) {
+            prefs = JSON.parse(stored);
+        }
+        prefs[type] = !!isVisible;
+        localStorage.setItem('status_pill_visibility', JSON.stringify(prefs));
+    } catch (e) {
+        console.error('Error saving pill visibility preference:', e);
+    }
+    updateInventoryHealthUI();
+}
+
+function initStatusPillsSettings() {
+    const placementToggle = document.getElementById('toggle-pill-placement');
+    const outToggle = document.getElementById('toggle-pill-out-of-stock');
+    const lowToggle = document.getElementById('toggle-pill-low-stock');
+
+    if (placementToggle) {
+        placementToggle.checked = getStatusPillVisibility('placement');
+        placementToggle.addEventListener('change', (e) => {
+            setStatusPillVisibility('placement', e.target.checked);
+        });
+    }
+
+    if (outToggle) {
+        outToggle.checked = getStatusPillVisibility('out_of_stock');
+        outToggle.addEventListener('change', (e) => {
+            setStatusPillVisibility('out_of_stock', e.target.checked);
+        });
+    }
+
+    if (lowToggle) {
+        lowToggle.checked = getStatusPillVisibility('low_stock');
+        lowToggle.addEventListener('change', (e) => {
+            setStatusPillVisibility('low_stock', e.target.checked);
+        });
+    }
+
+    const offcanvasSettings = document.getElementById('offcanvasSettings');
+    if (offcanvasSettings) {
+        offcanvasSettings.addEventListener('show.bs.offcanvas', () => {
+            if (placementToggle) placementToggle.checked = getStatusPillVisibility('placement');
+            if (outToggle) outToggle.checked = getStatusPillVisibility('out_of_stock');
+            if (lowToggle) lowToggle.checked = getStatusPillVisibility('low_stock');
+        });
+    }
+}
+
+window.getStatusPillVisibility = getStatusPillVisibility;
+window.setStatusPillVisibility = setStatusPillVisibility;
+
+function updateInventoryHealthUI() {
+    computeInventoryHealth(fetchedItems, fetchedEsps);
+
+    const container = document.getElementById('status-pills-container') || document.getElementById('placement-pill-container');
+    const placementBtn = document.getElementById('placement-pill-btn');
+    const outBtn = document.getElementById('out-of-stock-pill-btn');
+    const lowBtn = document.getElementById('low-stock-pill-btn');
+
+    const placementCountEl = document.getElementById('placement-pill-count');
+    const outCountEl = document.getElementById('out-of-stock-pill-count');
+    const lowCountEl = document.getElementById('low-stock-pill-count');
+
+    const placementIssues = inventoryHealthData.placementIssues;
+    const outOfStock = inventoryHealthData.outOfStockItems;
+    const lowStock = inventoryHealthData.lowStockItems;
+
+    const showPlacement = getStatusPillVisibility('placement');
+    const showOutOfStock = getStatusPillVisibility('out_of_stock');
+    const showLowStock = getStatusPillVisibility('low_stock');
+
+    // Update Pills
+    if (placementBtn) {
+        if (showPlacement && placementIssues.length > 0) {
+            placementBtn.classList.remove('d-none');
+            if (placementCountEl) placementCountEl.textContent = placementIssues.length;
+        } else {
+            placementBtn.classList.add('d-none');
+        }
+    }
+
+    if (outBtn) {
+        if (showOutOfStock && outOfStock.length > 0) {
+            outBtn.classList.remove('d-none');
+            if (outCountEl) outCountEl.textContent = outOfStock.length;
+        } else {
+            outBtn.classList.add('d-none');
+        }
+    }
+
+    if (lowBtn) {
+        if (showLowStock && lowStock.length > 0) {
+            lowBtn.classList.remove('d-none');
+            if (lowCountEl) lowCountEl.textContent = lowStock.length;
+        } else {
+            lowBtn.classList.add('d-none');
+        }
+    }
+
+    let visiblePillsCount = 0;
+    if (placementBtn && !placementBtn.classList.contains('d-none')) visiblePillsCount++;
+    if (outBtn && !outBtn.classList.contains('d-none')) visiblePillsCount++;
+    if (lowBtn && !lowBtn.classList.contains('d-none')) visiblePillsCount++;
+
+    if (container) {
+        if (visiblePillsCount > 0) {
+            container.classList.remove('d-none');
+        } else {
+            container.classList.add('d-none');
+        }
+    }
+
+    // Update Drawer Tab Badges
+    const drawerPlacementBadge = document.getElementById('drawer-placement-count');
+    const drawerOutBadge = document.getElementById('drawer-out-count');
+    const drawerLowBadge = document.getElementById('drawer-low-count');
+    const legacyCount = document.getElementById('drawer-issues-count');
+
+    if (drawerPlacementBadge) drawerPlacementBadge.textContent = placementIssues.length;
+    if (drawerOutBadge) drawerOutBadge.textContent = outOfStock.length;
+    if (drawerLowBadge) drawerLowBadge.textContent = lowStock.length;
+    if (legacyCount) legacyCount.textContent = placementIssues.length;
+
+    // Render Drawer Lists
+    renderPlacementDrawerList(placementIssues);
+    renderOutOfStockDrawerList(outOfStock);
+    renderLowStockDrawerList(lowStock);
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
+
+function renderPlacementDrawerList(placementIssues) {
+    const list = document.getElementById('placement-items-list');
+    if (!list) return;
+
+    if (!placementIssues || placementIssues.length === 0) {
+        list.innerHTML = '<p class="text-muted small text-center my-4">✨ All items are properly assigned to cabinet bins.</p>';
+        return;
+    }
+
+    list.innerHTML = placementIssues.map(({ item, badgeText, description, badgeClass }) => {
+        const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
+        const imgHtml = hasImage
+            ? `<img src="${safeUrl(item.image)}" class="rounded object-fit-cover flex-shrink-0" style="width: 38px; height: 38px;" alt="${escapeHtml(item.name)}">`
+            : `<div class="rounded bg-body-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;"><i data-lucide="package" class="icon-n4px text-secondary"></i></div>`;
+
+        return `
+            <div class="card p-2 border shadow-xs bg-body">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div class="d-flex align-items-center gap-2 overflow-hidden">
+                        ${imgHtml}
+                        <div class="overflow-hidden">
+                            <div class="fw-semibold text-truncate small">${escapeHtml(item.name)}</div>
+                            <div class="text-muted text-truncate" style="font-size: 0.75rem;">${escapeHtml(description)}</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span class="badge ${badgeClass} rounded-pill d-none d-sm-inline">${badgeText}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Assign bin location">
+                            <span class="small">Assign Bin</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderOutOfStockDrawerList(outOfStockItems) {
+    const list = document.getElementById('out-of-stock-items-list');
+    if (!list) return;
+
+    if (!outOfStockItems || outOfStockItems.length === 0) {
+        list.innerHTML = '<p class="text-muted small text-center my-4">🎉 No items are currently out of stock.</p>';
+        return;
+    }
+
+    list.innerHTML = outOfStockItems.map(({ item, minQuantity }) => {
+        const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
+        const imgHtml = hasImage
+            ? `<img src="${safeUrl(item.image)}" class="rounded object-fit-cover flex-shrink-0" style="width: 38px; height: 38px;" alt="${escapeHtml(item.name)}">`
+            : `<div class="rounded bg-body-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;"><i data-lucide="alert-octagon" class="icon-n4px text-danger"></i></div>`;
+
+        return `
+            <div class="card p-2 border shadow-xs bg-body">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div class="d-flex align-items-center gap-2 overflow-hidden">
+                        ${imgHtml}
+                        <div class="overflow-hidden">
+                            <div class="fw-semibold text-truncate small">${escapeHtml(item.name)}</div>
+                            <div class="text-muted text-truncate" style="font-size: 0.75rem;">
+                                Stock: <span class="text-danger fw-bold">0</span> &bull; Min: ${minQuantity}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" onclick="quickRestockItem(${item.id})" title="Add 1 to stock">
+                            <i data-lucide="plus" class="icon-n4px"></i>
+                            <span class="small">+1</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Edit item">
+                            <span class="small">Edit</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderLowStockDrawerList(lowStockItems) {
+    const list = document.getElementById('low-stock-items-list');
+    if (!list) return;
+
+    if (!lowStockItems || lowStockItems.length === 0) {
+        list.innerHTML = '<p class="text-muted small text-center my-4">👍 All items have adequate stock levels.</p>';
+        return;
+    }
+
+    list.innerHTML = lowStockItems.map(({ item, quantity, minQuantity }) => {
+        const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
+        const imgHtml = hasImage
+            ? `<img src="${safeUrl(item.image)}" class="rounded object-fit-cover flex-shrink-0" style="width: 38px; height: 38px;" alt="${escapeHtml(item.name)}">`
+            : `<div class="rounded bg-body-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;"><i data-lucide="trending-down" class="icon-n4px text-warning"></i></div>`;
+
+        return `
+            <div class="card p-2 border shadow-xs bg-body">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div class="d-flex align-items-center gap-2 overflow-hidden">
+                        ${imgHtml}
+                        <div class="overflow-hidden">
+                            <div class="fw-semibold text-truncate small">${escapeHtml(item.name)}</div>
+                            <div class="text-muted text-truncate" style="font-size: 0.75rem;">
+                                Stock: <span class="text-warning fw-bold">${quantity}</span> &bull; Min: ${minQuantity}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" onclick="quickRestockItem(${item.id})" title="Add 1 to stock">
+                            <i data-lucide="plus" class="icon-n4px"></i>
+                            <span class="small">+1</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Edit item">
+                            <span class="small">Edit</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.openStatusDrawer = function(tabName = 'placement') {
+    const drawerEl = document.getElementById('unassigned-drawer');
+    if (!drawerEl || typeof bootstrap === 'undefined' || !bootstrap.Offcanvas) return;
+
+    let tabBtnId = 'tab-placement-btn';
+    if (tabName === 'out_of_stock') tabBtnId = 'tab-out-of-stock-btn';
+    if (tabName === 'low_stock') tabBtnId = 'tab-low-stock-btn';
+
+    const tabBtn = document.getElementById(tabBtnId);
+    if (tabBtn && bootstrap.Tab) {
+        const tab = bootstrap.Tab.getOrCreateInstance(tabBtn);
+        tab.show();
+    }
+    inventoryHealthData.activeDrawerTab = tabName;
+    updateFilterButtonText();
+
+    const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(drawerEl);
+    bsOffcanvas.show();
+};
+
+window.openPlacementDrawer = function() {
+    window.openStatusDrawer('placement');
+};
+
+window.quickRestockItem = function(itemId) {
+    const item = (fetchedItems || []).find(it => String(it.id) === String(itemId));
+    if (!item) return;
+    const currentQty = parseInt(item.quantity, 10) || 0;
+    handleQuantitySet(item, currentQty + 1);
+    updateInventoryHealthUI();
+    showToast(`Added 1 to "${item.name}" (now ${item.quantity})`, 'success');
+};
+
+function openAssignPlacement(itemId) {
+    const item = fetchedItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+
+    // Close the offcanvas drawer
+    const drawerEl = document.getElementById('unassigned-drawer');
+    if (drawerEl && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+        const inst = bootstrap.Offcanvas.getInstance(drawerEl);
+        if (inst) inst.hide();
+    }
+
+    // Close the map modal if open
+    if (window.DialogManager) {
+        DialogManager.close('map-modal');
+    } else {
+        const mapModalEl = document.getElementById('map-modal');
+        if (mapModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const mapModal = bootstrap.Modal.getInstance(mapModalEl);
+            if (mapModal) mapModal.hide();
+        }
+    }
+
+    // Try finding the item's card to trigger standard edit
+    const col = document.querySelector(`.item-col[data-id="${itemId}"]`);
+    if (col) {
+        const editBtn = col.querySelector('.edit-btn');
+        if (editBtn) {
+            editBtn.click();
+            return;
+        }
+    }
+
+    // Direct fallback
+    isEditingItem = true;
+    editingItemId = item.id;
+    editingItemName = item.name;
+    editingItemIP = item.ip;
+    DialogManager.open('item-modal');
+}
+
+function updateFilterButtonText() {
+    const filterBtnText = document.getElementById('drawer-filter-btn-text');
+    if (!filterBtnText) return;
+    const activeTab = inventoryHealthData.activeDrawerTab || 'placement';
+    if (inventoryHealthData.isFiltered && inventoryHealthData.activeFilterCategory === activeTab) {
+        filterBtnText.textContent = 'Clear Filter';
+    } else {
+        filterBtnText.textContent = 'Filter Grid';
+    }
+}
+
+function toggleFilterGridToUnassigned() {
+    const activeTab = inventoryHealthData.activeDrawerTab || 'placement';
+
+    if (inventoryHealthData.isFiltered && inventoryHealthData.activeFilterCategory === activeTab) {
+        inventoryHealthData.isFiltered = false;
+        inventoryHealthData.activeFilterCategory = null;
+        updateFilterButtonText();
+        generateItemsGrid();
+        return;
+    }
+
+    inventoryHealthData.isFiltered = true;
+    inventoryHealthData.activeFilterCategory = activeTab;
+    updateFilterButtonText();
+
+    // Close offcanvas drawer so user can view grid
+    const drawerEl = document.getElementById('unassigned-drawer');
+    if (drawerEl && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+        const inst = bootstrap.Offcanvas.getInstance(drawerEl);
+        if (inst) inst.hide();
+    }
+
+    let targetItems = [];
+    if (activeTab === 'placement') {
+        targetItems = inventoryHealthData.placementIssues.map(i => i.item);
+    } else if (activeTab === 'out_of_stock') {
+        targetItems = inventoryHealthData.outOfStockItems.map(i => i.item);
+    } else if (activeTab === 'low_stock') {
+        targetItems = inventoryHealthData.lowStockItems.map(i => i.item);
+    }
+
+    applyStatusFilterToGrid(targetItems);
+}
+
+function applyStatusFilterToGrid(targetItems) {
+    const targetIds = new Set((targetItems || []).map(i => String(i.id)));
+    const allCols = document.querySelectorAll('.item-col');
+    let visibleCount = 0;
+
+    allCols.forEach(col => {
+        if (targetIds.has(String(col.dataset.id))) {
+            col.classList.remove('d-none');
+            col.style.display = 'flex';
+            visibleCount++;
+        } else {
+            col.classList.add('d-none');
+            col.style.display = 'none';
+        }
+    });
+
+    updateEmptyState(visibleCount, (fetchedItems || []).length);
+}
+
+function applyPlacementFilterToGrid() {
+    toggleFilterGridToUnassigned();
+}
+
 
 function populateEspDropdown() {
     let index = 0;
@@ -522,19 +1077,85 @@ function getStockBadgeConfig(quantity, minQuantity = 3) {
     }
 }
 
-function formatLocationBadge(positions) {
-    if (!Array.isArray(positions) || positions.length === 0) return '';
-    const count = positions.length;
-    const allBinsText = positions.join(', ');
+function formatLocationBadge(positions, itemIp = null) {
+    const parsedPos = parsePositionsArray(positions);
+    if (parsedPos.length === 0) return '';
+
+    let isOrphaned = false;
+    let maxDrawers = 0;
+    if (itemIp) {
+        const esp = findEspForItem({ ip: itemIp });
+        if (esp) {
+            maxDrawers = getEspTotalDrawers(esp);
+            if (maxDrawers > 0) {
+                isOrphaned = parsedPos.some(p => p > maxDrawers || p <= 0);
+            }
+        }
+    }
+
+    const count = parsedPos.length;
+    const allBinsText = parsedPos.join(', ');
     let displayText = '';
     if (count === 1) {
-        displayText = `Bin #${positions[0]}`;
+        displayText = `Bin #${parsedPos[0]}`;
     } else if (count === 2) {
-        displayText = `Bins #${positions[0]}, #${positions[1]}`;
+        displayText = `Bins #${parsedPos[0]}, #${parsedPos[1]}`;
     } else {
-        displayText = `Bins #${positions[0]}, #${positions[1]} (+${count - 2})`;
+        displayText = `Bins #${parsedPos[0]}, #${parsedPos[1]} (+${count - 2})`;
     }
+
+    if (isOrphaned) {
+        return `<span class="location-badge location-badge-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Warning: Exceeds cabinet capacity (${maxDrawers} bins). Bins: ${escapeHtml(allBinsText)}">⚠️ ${escapeHtml(displayText)}</span>`;
+    }
+
     return `<span class="location-badge" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Bins: ${escapeHtml(allBinsText)}">${escapeHtml(displayText)}</span>`;
+}
+
+// Locate item with proactive validation for unassigned or orphaned bins
+function locateItem(item) {
+    if (!item) return;
+    if (!item.ip || String(item.ip).trim() === '') {
+        showToast(`Cannot locate "${item.name}": No cabinet or controller assigned.`, 'warning');
+        return;
+    }
+    const esp = findEspForItem(item);
+    if (!esp) {
+        showToast(`Cannot locate "${item.name}": Cabinet "${item.ip}" was not found.`, 'warning');
+        return;
+    }
+    const positions = parsePositionsArray(item.position);
+    if (positions.length === 0) {
+        showToast(`Cannot locate "${item.name}": No bin position assigned.`, 'warning');
+        return;
+    }
+    const maxDrawers = getEspTotalDrawers(esp);
+    const validBins = maxDrawers > 0 ? positions.filter(p => p > 0 && p <= maxDrawers) : positions;
+    const invalidBins = maxDrawers > 0 ? positions.filter(p => p > maxDrawers || p <= 0) : [];
+    if (invalidBins.length > 0 && validBins.length === 0) {
+        showToast(`Cannot locate "${item.name}": Bin #${invalidBins.join(', #')} exceeds cabinet capacity (${maxDrawers} bins).`, 'warning');
+        return;
+    }
+    if (invalidBins.length > 0 && validBins.length > 0) {
+        showToast(`Warning: Bin #${invalidBins.join(', #')} exceeds cabinet capacity (${maxDrawers} bins). Locating valid bin(s)...`, 'warning');
+    }
+    fetch(`/api/items/${item.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ action: "locate" }),
+    })
+    .then(async (res) => {
+        if (res.ok) {
+            showToast(`Locating "${item.name}"...`, 'info');
+        } else {
+            const data = await res.json().catch(() => ({}));
+            const errMsg = data.error || `Could not locate "${item.name}".`;
+            showToast(`Cannot locate "${item.name}": ${errMsg}`, 'danger');
+        }
+    })
+    .catch((error) => {
+        console.error('Locate error:', error);
+        showToast(`Network error attempting to locate "${item.name}".`, 'danger');
+    });
 }
 
 // Function to create an HTML element representing an item
@@ -558,7 +1179,7 @@ function createItem(item) {
     col.dataset.tags = item.tags;
 
     const stockConfig = getStockBadgeConfig(item.quantity, item.min_quantity);
-    const locationBadgeHtml = formatLocationBadge(item.position);
+    const locationBadgeHtml = formatLocationBadge(item.position, item.ip);
     const hasImage = item.image && typeof item.image === 'string' && item.image.trim().length > 0;
     const itemLink = formatItemLink(item.link);
     const titleHtml = itemLink
@@ -650,24 +1271,12 @@ function createItem(item) {
     if (imgContainer) {
         imgContainer.addEventListener('click', (e) => {
             if (e.target.closest('.stock-badge') || e.target.closest('.location-badge')) return;
-            fetch(`/api/items/${item.id}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({ action: "locate" }),
-            }).then(res => {
-                if (res.ok) showToast(`Locating "${item.name}"...`, 'info');
-            }).catch((error) => console.error(error));
+            locateItem(item);
         });
     }
 
     col.querySelector('.locate-btn').addEventListener('click', () => {
-        fetch(`/api/items/${item.id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ action: "locate" }),
-        }).then(res => {
-            if (res.ok) showToast(`Locating "${item.name}"...`, 'info');
-        }).catch((error) => console.error(error));
+        locateItem(item);
     });
 
     col.querySelector('.delete-btn').addEventListener('click', async () => {
@@ -695,6 +1304,9 @@ function createItem(item) {
                     deleteTooltip.hide();
                 }
                 fetchDataAndLoadTags();
+                if (typeof updatePlacementHealthUI === 'function') {
+                    updatePlacementHealthUI();
+                }
                 if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
                     drawMapCanvas(currentMapEsp);
                 }
@@ -908,6 +1520,10 @@ function handleQuantitySet(item, newQuantity) {
         stockBadge.textContent = badgeConfig.text;
     }
 
+    if (typeof updateInventoryHealthUI === 'function') {
+        updateInventoryHealthUI();
+    }
+
     // Update stocktaking modal quantity display if currently showing this item
     const inventurAmount = document.getElementById('current-item-amount');
     if (inventurAmount && typeof currentnventurItemIndex !== 'undefined' && typeof fetchedItems !== 'undefined') {
@@ -1018,6 +1634,7 @@ function generateItemsGrid() {
         lucide.createIcons();
     }
     initialiseTooltips();
+    updatePlacementHealthUI();
 }
 function getActiveEspTab() {
     if (typeof filterESP !== 'undefined' && Array.isArray(filterESP) && filterESP.length > 0) {
@@ -1556,3 +2173,25 @@ document.addEventListener('hidden.bs.dropdown', function (e) {
         menu.style.marginLeft = '';
     }
 });
+
+// Unassigned / Placement drawer filter trigger
+document.getElementById('drawer-filter-grid-btn')?.addEventListener('click', toggleFilterGridToUnassigned);
+
+// Drawer tabs switch listener
+document.getElementById('drawer-tabs')?.addEventListener('shown.bs.tab', (event) => {
+    const targetId = event.target.getAttribute('id');
+    if (targetId === 'tab-placement-btn') inventoryHealthData.activeDrawerTab = 'placement';
+    else if (targetId === 'tab-out-of-stock-btn') inventoryHealthData.activeDrawerTab = 'out_of_stock';
+    else if (targetId === 'tab-low-stock-btn') inventoryHealthData.activeDrawerTab = 'low_stock';
+
+    if (typeof updateFilterButtonText === 'function') {
+        updateFilterButtonText();
+    }
+});
+
+// Initialize status pills toggles in Settings
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initStatusPillsSettings);
+} else {
+    initStatusPillsSettings();
+}

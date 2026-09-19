@@ -474,6 +474,9 @@ def item(id):
     elif request.method == 'POST':
         if request.form.get('action') == 'locate':
             item_ip = item.get('ip', '')
+            if not item_ip or not str(item_ip).strip():
+                return jsonify({'error': 'No cabinet assigned to this part'}), 400
+
             if is_valid_url_or_ip(item_ip):
                 ip = item_ip
             else:
@@ -485,6 +488,16 @@ def item(id):
             esp = db.get_esp_settings_by_ip(ip)
             if not esp:
                 return jsonify({'error': 'ESP device settings not found in database'}), 400
+
+            try:
+                raw_positions = json.loads(item.get('position', '[]')) if isinstance(item.get('position'), str) else item.get('position', [])
+                if not isinstance(raw_positions, list):
+                    raw_positions = []
+            except Exception:
+                raw_positions = []
+
+            if not raw_positions:
+                return jsonify({'error': 'No bin location assigned to this part'}), 400
 
             light(item.get('position', '[]'), ip, esp, item.get('quantity', 1))
             return jsonify({'success': True})
