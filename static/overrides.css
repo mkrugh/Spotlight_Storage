@@ -698,10 +698,16 @@ label {
 }
 
 /* Sort Dropdown styles */
-#sort_method,
-#sort_tags {
+#sort_method {
     min-width: 190px;
     max-width: calc(100vw - 1.5rem);
+}
+
+#sort_tags {
+    min-width: 270px;
+    max-width: calc(100vw - 1.5rem);
+    max-height: 420px;
+    overflow-y: auto;
 }
 
 #sort_method .btn-group .btn {
