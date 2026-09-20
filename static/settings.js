@@ -26,12 +26,55 @@ function updateTimeoutOutput() {
     addSettings(event);
 }
 
+function setStandbyCardVisualState(enabled) {
+    const card = document.getElementById('color-card-standby');
+    const preview = document.getElementById('preview-color-standby');
+    const hex = document.getElementById('picked-color-standby');
+    if (!card) return;
+    if (enabled) {
+        card.style.opacity = '1';
+        if (preview) preview.style.opacity = '1';
+        if (hex) hex.style.opacity = '1';
+    } else {
+        card.style.opacity = '0.65';
+        if (preview) preview.style.opacity = '0.3';
+        if (hex) hex.style.opacity = '0.5';
+    }
+}
+
+function handleStandbyToggleChange(e) {
+    const isChecked = e ? e.target.checked : true;
+    const standbyInput = document.getElementById("color-standby");
+    if (isChecked) {
+        const savedColor = localStorage.getItem('standby_custom_color') || (standbyInput && standbyInput.value !== '#000000' ? standbyInput.value : '#f0f0f0');
+        if (standbyInput) standbyInput.value = savedColor;
+        updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', savedColor);
+        setStandbyCardVisualState(true);
+        localStorage.setItem('standby_light_enabled', 'true');
+    } else {
+        if (standbyInput && standbyInput.value && standbyInput.value !== '#000000') {
+            localStorage.setItem('standby_custom_color', standbyInput.value);
+        }
+        setStandbyCardVisualState(false);
+        localStorage.setItem('standby_light_enabled', 'false');
+    }
+    addSettings();
+}
+
 function addSettings(event) {
     //event.preventDefault();
     const brightness = document.getElementById("settings_brightness").value;
     const timeout = document.getElementById("settings_timeout").value;
+    const standbyToggle = document.getElementById("toggle-standby-light");
+    const isStandbyEnabled = standbyToggle ? standbyToggle.checked : true;
+
+    let standbyColorVal = document.getElementById("color-standby").value.toString();
+    if (!isStandbyEnabled) {
+        standbyColorVal = "#000000";
+    }
+
     const colors = [
-        document.getElementById("color-standby").value.toString(),
+        standbyColorVal,
         document.getElementById("color-locate").value.toString()
     ];
     if (typeof lightMode === 'undefined' || !lightMode) {
@@ -82,9 +125,24 @@ function loadSettings() {
             const standbyColor = colors[0] || '#f0f0f0';
             const locateColor = colors[1] || '#00ff00';
 
-            document.getElementById("color-standby").value = standbyColor;
+            const standbyToggle = document.getElementById("toggle-standby-light");
+            const isSavedDisabled = localStorage.getItem('standby_light_enabled') === 'false';
+            if (standbyColor.toLowerCase() === '#000000' || isSavedDisabled) {
+                if (standbyToggle) standbyToggle.checked = false;
+                const savedCustom = localStorage.getItem('standby_custom_color') || '#f0f0f0';
+                document.getElementById("color-standby").value = savedCustom;
+                updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', savedCustom);
+                setStandbyCardVisualState(false);
+            } else {
+                if (standbyToggle) standbyToggle.checked = true;
+                localStorage.setItem('standby_custom_color', standbyColor);
+                localStorage.setItem('standby_light_enabled', 'true');
+                document.getElementById("color-standby").value = standbyColor;
+                updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', standbyColor);
+                setStandbyCardVisualState(true);
+            }
+
             document.getElementById("color-locate").value = locateColor;
-            updateColorDisplay('color-standby', 'picked-color-standby', 'preview-color-standby', standbyColor);
             updateColorDisplay('color-locate', 'picked-color-locate', 'preview-color-locate', locateColor);
 
             lightMode = settings.lightMode;
@@ -115,6 +173,11 @@ window.addEventListener('DOMContentLoaded', () => {
                 addSettings(e);
             });
         });
+
+    const standbyToggle = document.getElementById("toggle-standby-light");
+    if (standbyToggle) {
+        standbyToggle.addEventListener("change", handleStandbyToggleChange);
+    }
 });
 
 // Function to send a GET request based on the button pressed
@@ -257,6 +320,15 @@ function applyCustomColor(hex, commit = false) {
     if (bubble) bubble.style.backgroundColor = hex;
 
     if (activeColorTarget) {
+        if (activeColorTarget === 'standby') {
+            const standbyToggle = document.getElementById("toggle-standby-light");
+            if (standbyToggle && !standbyToggle.checked) {
+                standbyToggle.checked = true;
+                setStandbyCardVisualState(true);
+                localStorage.setItem('standby_light_enabled', 'true');
+            }
+            localStorage.setItem('standby_custom_color', hex);
+        }
         const inputId = `color-${activeColorTarget}`;
         const spanId = `picked-color-${activeColorTarget}`;
         const previewId = `preview-color-${activeColorTarget}`;

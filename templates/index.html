@@ -184,6 +184,9 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="color-preview-circle" id="preview-color-standby" style="background-color: #f0f0f0;"></span>
                             <code class="color-hex-code" id="picked-color-standby">#f0f0f0</code>
+                            <div class="form-check form-switch mb-0 ms-1" onclick="event.stopPropagation();">
+                                <input class="form-check-input cursor-pointer" type="checkbox" role="switch" id="toggle-standby-light" checked data-bs-toggle="tooltip" title="Enable/Disable Standby Light">
+                            </div>
                             <input type="color" id="color-standby" name="standby" value="#f0f0f0" class="visually-hidden">
                         </div>
                     </div>
