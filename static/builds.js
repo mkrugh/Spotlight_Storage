@@ -91,11 +91,59 @@ function renderBuildsList(builds) {
     lucide.createIcons();
 }
 
-function openNewBuildModal() {
+let initialBuildPartsJson = '[]';
+let initialBuildName = '';
+let isForcingClose = false;
+
+function getCurrentBuildPartsData() {
+    const rows = document.querySelectorAll('#build-parts-list .build-part-row');
+    return Array.from(rows).map(row => {
+        const hiddenInput = row.querySelector('.build-part-id');
+        const qtyInput = row.querySelector('.build-part-qty');
+        return {
+            item_id: hiddenInput ? hiddenInput.value : '',
+            quantity: qtyInput ? qtyInput.value : '1'
+        };
+    });
+}
+
+function hasUnsavedBuildParts() {
+    const rows = document.querySelectorAll('#build-parts-list .build-part-row');
+    const currentName = (document.getElementById('build-name-input')?.value || '').trim();
+
+    if (editingBuildId === null) {
+        // In a new build: if ANY parts were added or a name entered, it's unsaved!
+        return rows.length > 0 || currentName.length > 0;
+    } else {
+        // In edit mode: compare against initial loaded state
+        const currentParts = getCurrentBuildPartsData();
+        return JSON.stringify(currentParts) !== initialBuildPartsJson || currentName !== initialBuildName;
+    }
+}
+
+function forceCloseBuildModal() {
+    isForcingClose = true;
+    buildEditModal.hide();
+    isForcingClose = false;
+}
+
+async function openNewBuildModal() {
     editingBuildId = null;
+    initialBuildPartsJson = '[]';
+    initialBuildName = '';
     document.getElementById('build-edit-modal-label').textContent = 'New Build';
     document.getElementById('build-name-input').value = '';
     document.getElementById('build-parts-list').innerHTML = '';
+
+    if (typeof fetchedItems === 'undefined' || fetchedItems.length === 0) {
+        try {
+            const r = await fetch('/api/items');
+            if (r.ok) fetchedItems = await r.json();
+        } catch (e) {
+            console.error('Failed to fetch items for build picker:', e);
+        }
+    }
+
     buildsListModal.hide();
     buildEditModal.show();
 }
@@ -116,17 +164,24 @@ function openEditBuildModal(buildId) {
                     const allItems = (typeof fetchedItems !== 'undefined' && fetchedItems.length > 0)
                         ? fetchedItems : items;
 
+                    initialBuildName = '';
                     // Fetch build name from builds list
                     fetch('/api/builds')
                         .then(r => r.json())
                         .then(builds => {
                             const build = builds.find(b => b.id == buildId);
-                            if (build) document.getElementById('build-name-input').value = build.name;
+                            if (build) {
+                                document.getElementById('build-name-input').value = build.name;
+                                initialBuildName = build.name;
+                            }
                         });
 
                     data.items.forEach(part => {
                         addPartRow(allItems, part.item_id, part.quantity_needed);
                     });
+
+                    // Snapshot the initial state
+                    initialBuildPartsJson = JSON.stringify(getCurrentBuildPartsData());
 
                     buildsListModal.hide();
                     buildEditModal.show();
@@ -134,38 +189,139 @@ function openEditBuildModal(buildId) {
         });
 }
 
+function getItemTagsArray(item) {
+    if (!item || !item.tags) return [];
+    if (Array.isArray(item.tags)) {
+        return item.tags.map(t => typeof t === 'object' ? (t.value || t.name || String(t)) : String(t));
+    }
+    if (typeof item.tags === 'string') {
+        try {
+            const parsed = JSON.parse(item.tags);
+            if (Array.isArray(parsed)) {
+                return parsed.map(t => typeof t === 'object' ? (t.value || t.name || String(t)) : String(t));
+            }
+        } catch (e) {
+            // fallback for plain strings
+        }
+        return item.tags.replace(/[\[\]'"\\]/g, '').split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function safeEscape(str) {
+    if (typeof escapeHtml === 'function') return escapeHtml(str);
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function addPartRow(items, selectedItemId, qty) {
     const allItems = (items && items.length > 0) ? items
         : (typeof fetchedItems !== 'undefined' ? fetchedItems : []);
 
-    const options = allItems.map(item =>
-        `<option value="${item.id}" data-stock="${item.quantity ?? 0}" ${item.id == selectedItemId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`
-    ).join('');
+    const selectedItem = selectedItemId ? allItems.find(i => String(i.id) === String(selectedItemId)) : null;
+    const initialName = selectedItem ? selectedItem.name : '';
 
     const row = document.createElement('div');
     row.className = 'd-flex align-items-center mb-2 build-part-row flex-wrap gap-2';
     row.innerHTML = `
-        <select class="form-select form-select-sm build-part-select" style="min-width: 140px; flex: 1;">${options}</select>
+        <div class="build-part-search-container position-relative flex-grow-1" style="min-width: 180px;">
+            <input type="hidden" class="build-part-id" value="${safeEscape(selectedItemId || '')}">
+            <input type="text" class="form-control form-control-sm build-part-search-input" 
+                   placeholder="Search by part name or tag..." value="${safeEscape(initialName)}" 
+                   autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" 
+                   aria-haspopup="listbox" aria-label="Search part by name or tag">
+            <div class="build-part-search-menu shadow-sm" role="listbox" style="display: none;"></div>
+        </div>
         <div class="d-flex align-items-center gap-1.5 flex-shrink-0">
             <span class="small text-muted">Need:</span>
             <input type="number" class="form-control form-control-sm build-part-qty" style="width:70px" min="1" value="${qty || 1}">
         </div>
-        <span class="part-stock-badge border text-nowrap flex-shrink-0" id="part-stock-badge">In Stock: 0</span>
-        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-part flex-shrink-0">
+        <span class="part-stock-badge border text-nowrap flex-shrink-0" id="part-stock-badge">Select a part</span>
+        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-part flex-shrink-0" title="Remove part">
             <i data-lucide="trash" style="width:14px;height:14px;"></i>
         </button>
     `;
 
-    const selectEl = row.querySelector('.build-part-select');
+    const searchContainer = row.querySelector('.build-part-search-container');
+    const hiddenInput = row.querySelector('.build-part-id');
+    const searchInput = row.querySelector('.build-part-search-input');
+    const searchMenu = row.querySelector('.build-part-search-menu');
     const qtyInput = row.querySelector('.build-part-qty');
     const stockBadge = row.querySelector('#part-stock-badge');
 
+    let activeIndex = -1;
+
+    function closeDropdown() {
+        searchMenu.style.display = 'none';
+        searchInput.setAttribute('aria-expanded', 'false');
+        activeIndex = -1;
+    }
+
+    function renderDropdown(filterText) {
+        const query = (filterText || '').trim().toLowerCase();
+        const tokens = query.split(/\s+/).filter(Boolean);
+        const filtered = allItems.filter(item => {
+            if (tokens.length === 0) return true;
+            const name = (item.name || '').toLowerCase();
+            const tags = getItemTagsArray(item).map(t => t.toLowerCase());
+            return tokens.every(token => {
+                const rawToken = token.toLowerCase();
+                const cleanToken = rawToken.replace(/^[#@]+/, '');
+                if (!cleanToken) return tags.length > 0;
+                return name.includes(rawToken) || 
+                       name.includes(cleanToken) || 
+                       tags.some(t => t.includes(cleanToken) || t.includes(rawToken));
+            });
+        });
+
+        activeIndex = -1;
+        if (filtered.length === 0) {
+            searchMenu.innerHTML = '<div class="p-2 text-muted small text-center">No matching parts found</div>';
+        } else {
+            searchMenu.innerHTML = filtered.map((item, idx) => {
+                const tags = getItemTagsArray(item);
+                const tagsHtml = tags.map(t => `<span class="badge bg-body-secondary text-body border fw-normal me-1 mb-0.5" style="font-size:0.68rem; padding:0.15em 0.4em;">#${safeEscape(t)}</span>`).join('');
+                const isSelected = String(item.id) === String(hiddenInput.value);
+                return `
+                    <div class="build-part-search-item ${isSelected ? 'active' : ''}" 
+                         role="option" aria-selected="${isSelected ? 'true' : 'false'}"
+                         data-item-id="${safeEscape(item.id)}" data-item-name="${safeEscape(item.name)}" data-index="${idx}">
+                        <div class="d-flex flex-column overflow-hidden me-2" style="min-width: 0;">
+                            <span class="fw-semibold text-truncate small">${safeEscape(item.name)}</span>
+                            ${tagsHtml ? `<div class="d-flex align-items-center flex-wrap mt-0.5">${tagsHtml}</div>` : ''}
+                        </div>
+                        <span class="badge ${item.quantity > 0 ? 'bg-secondary-subtle text-secondary border border-secondary-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle'} flex-shrink-0 small ms-auto align-self-start mt-0.5">
+                            In Stock: ${item.quantity ?? 0}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+        searchMenu.style.display = 'block';
+        searchInput.setAttribute('aria-expanded', 'true');
+    }
+
+    function selectItem(id, name) {
+        hiddenInput.value = id;
+        searchInput.value = name;
+        closeDropdown();
+        updateStockBadge();
+    }
+
     function updateStockBadge() {
-        const selectedOpt = selectEl.options[selectEl.selectedIndex];
-        const stock = selectedOpt ? (parseInt(selectedOpt.getAttribute('data-stock'), 10) || 0) : 0;
+        const selectedId = hiddenInput.value;
+        const item = selectedId ? allItems.find(i => String(i.id) === String(selectedId)) : null;
+        const stock = item ? (parseInt(item.quantity, 10) || 0) : 0;
         const needed = parseInt(qtyInput.value, 10) || 1;
 
-        if (stock >= needed) {
+        if (!selectedId || !item) {
+            stockBadge.className = 'part-stock-badge border text-nowrap flex-shrink-0 bg-secondary-subtle text-secondary border-secondary-subtle';
+            stockBadge.textContent = 'Select a part';
+        } else if (stock >= needed) {
             stockBadge.className = 'part-stock-badge border text-nowrap flex-shrink-0 bg-success-subtle text-success border-success-subtle';
             stockBadge.textContent = `In Stock: ${stock}`;
         } else {
@@ -174,11 +330,74 @@ function addPartRow(items, selectedItemId, qty) {
         }
     }
 
-    selectEl.addEventListener('change', updateStockBadge);
+    searchInput.addEventListener('focus', () => {
+        renderDropdown(searchInput.value);
+    });
+
+    searchInput.addEventListener('input', () => {
+        const selectedId = hiddenInput.value;
+        const item = selectedId ? allItems.find(i => String(i.id) === String(selectedId)) : null;
+        if (!item || searchInput.value.trim() !== item.name) {
+            hiddenInput.value = '';
+            updateStockBadge();
+        }
+        renderDropdown(searchInput.value);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        const itemsList = searchMenu.querySelectorAll('.build-part-search-item');
+        if (searchMenu.style.display !== 'none' && itemsList.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % itemsList.length;
+                itemsList.forEach((el, idx) => el.classList.toggle('highlighted', idx === activeIndex));
+                const curr = searchMenu.querySelector(`[data-index="${activeIndex}"]`);
+                if (curr) curr.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + itemsList.length) % itemsList.length;
+                itemsList.forEach((el, idx) => el.classList.toggle('highlighted', idx === activeIndex));
+                const curr = searchMenu.querySelector(`[data-index="${activeIndex}"]`);
+                if (curr) curr.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeIndex >= 0 && activeIndex < itemsList.length) {
+                    const target = itemsList[activeIndex];
+                    selectItem(target.dataset.itemId, target.dataset.itemName);
+                } else if (itemsList.length === 1) {
+                    const target = itemsList[0];
+                    selectItem(target.dataset.itemId, target.dataset.itemName);
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeDropdown();
+            } else if (e.key === 'Tab') {
+                closeDropdown();
+            }
+        }
+    });
+
+    searchMenu.addEventListener('click', (e) => {
+        const itemEl = e.target.closest('.build-part-search-item');
+        if (itemEl) {
+            selectItem(itemEl.dataset.itemId, itemEl.dataset.itemName);
+        }
+    });
+
+    // Close menu when focus moves outside this search container (e.g. Tab navigation)
+    searchContainer.addEventListener('focusout', (e) => {
+        if (!searchContainer.contains(e.relatedTarget)) {
+            closeDropdown();
+        }
+    });
+
     qtyInput.addEventListener('input', updateStockBadge);
     updateStockBadge();
 
-    row.querySelector('.btn-remove-part').addEventListener('click', () => row.remove());
+    row.querySelector('.btn-remove-part').addEventListener('click', () => {
+        row.remove();
+    });
+
     document.getElementById('build-parts-list').appendChild(row);
     lucide.createIcons();
 }
@@ -195,10 +414,33 @@ function saveBuild() {
     }
 
     const rows = document.querySelectorAll('#build-parts-list .build-part-row');
-    const items = Array.from(rows).map(row => ({
-        item_id: parseInt(row.querySelector('.build-part-select').value, 10),
-        quantity_needed: parseInt(row.querySelector('.build-part-qty').value, 10) || 1
-    }));
+    if (rows.length > 0) {
+        const unselectedRow = Array.from(rows).some(row => {
+            const hiddenInput = row.querySelector('.build-part-id');
+            const selectEl = row.querySelector('.build-part-select');
+            const idVal = hiddenInput ? hiddenInput.value : (selectEl ? selectEl.value : null);
+            return !idVal || isNaN(parseInt(idVal, 10)) || parseInt(idVal, 10) <= 0;
+        });
+
+        if (unselectedRow) {
+            if (typeof showToast === 'function') {
+                showToast('Please select a valid part from the search list for all rows.', 'warning');
+            } else {
+                alert('Please select a valid part from the search list for all rows.');
+            }
+            return;
+        }
+    }
+
+    const items = Array.from(rows).map(row => {
+        const hiddenInput = row.querySelector('.build-part-id');
+        const selectEl = row.querySelector('.build-part-select');
+        const idVal = hiddenInput ? hiddenInput.value : (selectEl ? selectEl.value : null);
+        return {
+            item_id: parseInt(idVal, 10),
+            quantity_needed: parseInt(row.querySelector('.build-part-qty').value, 10) || 1
+        };
+    }).filter(item => !isNaN(item.item_id) && item.item_id > 0);
 
     const body = { name, items };
 
@@ -212,7 +454,7 @@ function saveBuild() {
     })
         .then(r => r.json())
         .then(() => {
-            buildEditModal.hide();
+            forceCloseBuildModal();
             if (typeof showToast === 'function') {
                 showToast(`Build "${name}" saved successfully.`, 'success');
             }
@@ -331,3 +573,84 @@ document.getElementById('builds-list-container').addEventListener('click', funct
     if (editBtn) openEditBuildModal(editBtn.dataset.buildId);
     if (delBtn) deleteBuild(delBtn.dataset.buildId, delBtn.dataset.buildName);
 });
+
+// Delegated click listener to dismiss any open search dropdowns on outside clicks
+document.addEventListener('click', function (e) {
+    if (!e.target.closest('.build-part-search-container')) {
+        document.querySelectorAll('.build-part-search-menu').forEach(menu => {
+            menu.style.display = 'none';
+        });
+        document.querySelectorAll('.build-part-search-input').forEach(input => {
+            input.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
+
+// Intercept exiting build-edit-modal without saving when parts have been added
+const buildEditModalEl = document.getElementById('build-edit-modal');
+if (buildEditModalEl) {
+    buildEditModalEl.addEventListener('click', async function (e) {
+        if (isForcingClose) return;
+
+        const isDismissBtn = e.target.closest('[data-dialog-dismiss], [data-bs-dismiss="modal"]');
+        const isBackdropClick = (e.target === buildEditModalEl);
+
+        if (!isDismissBtn && !isBackdropClick) return;
+
+        if (hasUnsavedBuildParts()) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            let confirmed = false;
+            if (typeof showConfirmModal === 'function') {
+                confirmed = await showConfirmModal({
+                    title: 'Discard Unsaved Parts?',
+                    message: 'You have added parts to this build. Are you sure you want to exit without saving?',
+                    confirmText: 'Discard & Exit',
+                    confirmBtnClass: 'btn-danger'
+                });
+            } else {
+                confirmed = confirm('You have added parts to this build. Are you sure you want to exit without saving?');
+            }
+
+            if (confirmed) {
+                forceCloseBuildModal();
+            }
+        }
+    }, true);
+
+    buildEditModalEl.addEventListener('keydown', async function (e) {
+        if (e.key === 'Escape' && !isForcingClose) {
+            if (hasUnsavedBuildParts()) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+
+                let confirmed = false;
+                if (typeof showConfirmModal === 'function') {
+                    confirmed = await showConfirmModal({
+                        title: 'Discard Unsaved Parts?',
+                        message: 'You have added parts to this build. Are you sure you want to exit without saving?',
+                        confirmText: 'Discard & Exit',
+                        confirmBtnClass: 'btn-danger'
+                    });
+                } else {
+                    confirmed = confirm('You have added parts to this build. Are you sure you want to exit without saving?');
+                }
+
+                if (confirmed) {
+                    forceCloseBuildModal();
+                }
+            }
+        }
+    }, true);
+
+    buildEditModalEl.addEventListener('cancel', function (e) {
+        if (!isForcingClose && hasUnsavedBuildParts()) {
+            e.preventDefault();
+        }
+    });
+}
+
+

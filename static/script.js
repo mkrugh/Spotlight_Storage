@@ -1880,12 +1880,25 @@ function filterItemsBySearch(text) {
         if (!itemsContainer) return;
         const items = Array.from(itemsContainer.children).filter(el => el.classList.contains('item-col') && !el.classList.contains('skeleton-col'));
         let visibleCount = 0;
+        const tokens = searchText.split(/\s+/).filter(Boolean);
 
         items.forEach((item) => {
             const itemName = (item.dataset["name"] || "").toLowerCase();
-            const itemTags = (item.dataset["tags"] || "").toLowerCase();
-            const itemEsp = (item.dataset["espName"] || "").toLowerCase();
-            if (!searchText || itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1) {
+            let itemTags = (item.dataset["tags"] || "").toLowerCase();
+            if (itemTags === 'undefined' || itemTags === 'null') itemTags = '';
+            let itemEsp = (item.dataset["espName"] || "").toLowerCase();
+            if (itemEsp === 'undefined' || itemEsp === 'null') itemEsp = '';
+
+            const matches = tokens.length === 0 || tokens.every(token => {
+                const rawToken = token.toLowerCase();
+                const cleanToken = rawToken.replace(/^[#@]+/, '');
+                if (!cleanToken) return itemTags.length > 0;
+                return itemName.includes(rawToken) || 
+                       itemName.includes(cleanToken) || 
+                       (cleanToken && itemTags.includes(cleanToken)) || 
+                       itemEsp.includes(rawToken);
+            });
+            if (matches) {
                 item.style.display = "flex";
                 visibleCount++;
             } else {

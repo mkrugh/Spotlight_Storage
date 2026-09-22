@@ -61,10 +61,11 @@ function updateTagSearchQuery(query) {
     filterTagMenuItems();
 }
 
-function filterTagMenuItems() {
+function filterTagsMenu() {
     const sortTagsMenu = document.getElementById('sort_tags');
     if (!sortTagsMenu) return;
-    const query = tagMenuSearchQuery.trim().toLowerCase();
+    const rawQuery = tagMenuSearchQuery.trim().toLowerCase();
+    const query = rawQuery.replace(/^[#@]+/, '');
     const items = sortTagsMenu.querySelectorAll('.tag-menu-item');
     const emptyNotice = sortTagsMenu.querySelector('.tag-menu-empty');
     let matchCount = 0;
@@ -72,7 +73,8 @@ function filterTagMenuItems() {
     items.forEach(li => {
         const anchor = li.querySelector('a');
         const text = (anchor ? anchor.getAttribute('data-filter') : '') || '';
-        if (!query || text.toLowerCase().includes(query)) {
+        const cleanText = text.toLowerCase().replace(/^[#@]+/, '');
+        if (!query || cleanText.includes(query) || text.toLowerCase().includes(rawQuery)) {
             li.classList.remove('d-none');
             matchCount++;
         } else {
@@ -90,8 +92,12 @@ function filterTagMenuItems() {
 
     const clearBtn = document.getElementById('dropdown-tag-search-clear');
     if (clearBtn) {
-        clearBtn.classList.toggle('d-none', !query);
+        clearBtn.classList.toggle('d-none', !rawQuery);
     }
+}
+
+function filterTagMenuItems() {
+    return filterTagsMenu();
 }
 
 function fetchDataAndLoadTags() {
@@ -232,10 +238,27 @@ function itemMatchesSearch(itemElement) {
     if (!searchInput) return true;
     const searchText = (searchInput.value || '').toLowerCase().trim();
     if (!searchText) return true;
+
+    const tokens = searchText.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return true;
+
     const itemName = (itemElement.dataset["name"] || "").toLowerCase();
-    const itemTags = (itemElement.dataset["tags"] || "").toLowerCase();
-    const itemEsp = (itemElement.dataset["espName"] || "").toLowerCase();
-    return itemName.indexOf(searchText) !== -1 || itemTags.indexOf(searchText) !== -1 || itemEsp.indexOf(searchText) !== -1;
+    const itemTagsList = getItemTagsArray(itemElement);
+    let itemTags = (itemElement.dataset["tags"] || "").toLowerCase();
+    if (itemTags === 'undefined' || itemTags === 'null') itemTags = '';
+    let itemEsp = (itemElement.dataset["espName"] || "").toLowerCase();
+    if (itemEsp === 'undefined' || itemEsp === 'null') itemEsp = '';
+
+    return tokens.every(token => {
+        const rawToken = token.toLowerCase();
+        const cleanToken = rawToken.replace(/^[#@]+/, '');
+        if (!cleanToken) return itemTagsList.length > 0;
+        return itemName.includes(rawToken) || 
+               itemName.includes(cleanToken) ||
+               itemTagsList.some(t => t.includes(cleanToken) || t.includes(rawToken)) ||
+               (cleanToken && itemTags.includes(cleanToken)) || 
+               itemEsp.includes(rawToken);
+    });
 }
 
 function itemMatchesEspFilter(itemElement) {
