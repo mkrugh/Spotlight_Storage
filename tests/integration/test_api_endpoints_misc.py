@@ -95,3 +95,32 @@ class TestApiEndpointsMisc:
         res = client.post('/test_lights', json={'192.168.1.100': ['one', 'two']})
         assert res.status_code == 400
         assert 'Invalid positions' in res.get_json()['error']
+
+    def test_check_vendor_updates_success(self, client, monkeypatch):
+        """Verify GET /api/vendor/check-updates returns library status information."""
+        import sys
+        import os
+        scripts_dir = os.path.join(os.path.dirname(__file__), '../../scripts')
+        sys.path.insert(0, os.path.abspath(scripts_dir))
+        import update_vendor
+        sys.path.pop(0)
+
+        # Mock npm lookup to return deterministic versions offline
+        def mock_get_npm(pkg):
+            if pkg == 'bootstrap':
+                return '5.3.3'
+            return '1.0.0'
+
+        monkeypatch.setattr(update_vendor, 'get_latest_npm_version', mock_get_npm)
+
+        res = client.get('/api/vendor/check-updates')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert 'libraries' in data
+        assert 'has_updates' in data
+        assert 'update_command' in data
+        assert isinstance(data['libraries'], list)
+        names = [lib['name'] for lib in data['libraries']]
+        assert 'bootstrap' in names
+        assert 'jquery' in names
+

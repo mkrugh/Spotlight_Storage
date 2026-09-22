@@ -830,9 +830,86 @@ document.getElementById("inventur").addEventListener("click", function () {
     };
 });
 
+/**
+ * Check vendored frontend libraries for available updates.
+ * Called by the "Check for Updates" button in settings.
+ */
+async function checkVendorUpdates() {
+    const btn = document.getElementById('check-vendor-updates-btn');
+    const resultsDiv = document.getElementById('vendor-update-results');
+    const tbody = document.getElementById('vendor-update-tbody');
+    const hint = document.getElementById('vendor-update-hint');
 
+    if (!btn || !resultsDiv || !tbody || !hint) return;
+
+    // Show loading state
+    btn.disabled = true;
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Checking...';
+
+    try {
+        const response = await fetch('/api/vendor/check-updates');
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+        const data = await response.json();
+
+        // Clear previous results
+        tbody.innerHTML = '';
+
+        const statusBadge = {
+            'current': '<span class="badge bg-success">Current</span>',
+            'outdated': '<span class="badge bg-warning text-dark">Update Available</span>',
+            'error': '<span class="badge bg-danger">Error</span>',
+            'unknown': '<span class="badge bg-secondary">Unknown</span>'
+        };
+
+        (data.libraries || []).forEach(function(lib) {
+            const row = document.createElement('tr');
+            const escapedName = lib.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escapedCurrent = lib.current.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escapedLatest = lib.latest.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            row.innerHTML =
+                '<td>' + escapedName + '</td>' +
+                '<td><code>' + escapedCurrent + '</code></td>' +
+                '<td><code>' + escapedLatest + '</code></td>' +
+                '<td>' + (statusBadge[lib.status] || lib.status) + '</td>';
+            tbody.appendChild(row);
+        });
+
+        if (data.has_updates) {
+            hint.textContent = 'Run: python scripts/update_vendor.py --update';
+            hint.classList.remove('text-muted');
+            hint.classList.add('text-warning');
+        } else {
+            hint.textContent = 'All libraries are up to date.';
+            hint.classList.remove('text-warning');
+            hint.classList.add('text-muted');
+        }
+
+        resultsDiv.classList.remove('d-none');
+    } catch (err) {
+        if (typeof showToast === 'function') {
+            showToast('Failed to check for updates: ' + err.message, 'danger');
+        }
+        console.error('Vendor update check failed:', err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+        // Re-initialize lucide icons for the button icon
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     populateEspTable();
+
+    // Wire up vendor update check button
+    const vendorBtn = document.getElementById('check-vendor-updates-btn');
+    if (vendorBtn) {
+        vendorBtn.addEventListener('click', checkVendorUpdates);
+    }
 });

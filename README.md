@@ -184,6 +184,15 @@ To access Spotlight Storage from smartphones, tablets, or other devices on your 
 2. Open `http://<your-host-ip>:5000` in any mobile or desktop browser.
 
 ---
+ 
+## API Integration & Custom Scripts
+
+Spotlight Storage provides RESTful endpoints (such as `/api/items`, `/api/esp`, `/api/builds`, and `/api/tags`) for third-party scripts, automations, or hardware integrations.
+
+> [!NOTE]
+> **Payload Format Requirement:** All mutating API requests (`POST`, `PUT`, `DELETE`) must send a JSON payload with the `Content-Type: application/json` HTTP header. Form-encoded data (`application/x-www-form-urlencoded`) is not accepted on mutating endpoints.
+
+---
 
 ## Testing & Verification
 

@@ -24,6 +24,7 @@ function populateEspTable() {
                 ipLink.href = `http://${esp.esp_ip}`;
                 ipLink.textContent = esp.esp_ip;
                 ipLink.target = "_blank"; // Opens link in a new window/tab
+                ipLink.rel = "noopener noreferrer";
                 ipLink.setAttribute("data-bs-toggle", "tooltip");
                 ipLink.setAttribute("title", "WLED"); // Tooltip text
                 cellIp.appendChild(ipLink);

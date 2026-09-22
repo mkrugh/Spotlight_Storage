@@ -126,6 +126,24 @@ class TestAdvancedSSRFSecurity:
             response = client.get(f'/proxy-image?url={url}')
             assert response.status_code == 400, f"Expected internal domain to be rejected: {url}"
 
+    def test_esp_connection_ssrf_blocked(self, client):
+        """Verify /api/esp/test blocks loopback, metadata, and link-local SSRF targets."""
+        forbidden_targets = [
+            '127.0.0.1',
+            '127.0.0.1:80',
+            '127.0.0.2',
+            'localhost',
+            '0.0.0.0',
+            '169.254.169.254',  # AWS/GCP/Azure instance metadata service
+            '169.254.1.1',      # Link-local address
+        ]
+        for target in forbidden_targets:
+            res = client.post('/api/esp/test', json={'ip': target})
+            assert res.status_code == 400, f"Expected 400 for dangerous ESP target: {target}"
+            data = res.get_json()
+            assert data['success'] is False
+            assert 'not an allowed target' in data['error'].lower() or 'not a valid' in data['error'].lower()
+
 
 class TestSqlInjectionResiliency:
     """
@@ -231,3 +249,31 @@ class TestInputValidationAndFuzzing:
             # Verify it can be retrieved without crashing
             get_res = client.get(f'/api/items/{item_id}')
             assert get_res.status_code == 200
+
+    def test_csp_headers_present(self, client):
+        """Verify Content-Security-Policy and defensive security headers are returned."""
+        res = client.get('/')
+        assert res.status_code == 200
+        assert 'Content-Security-Policy' in res.headers
+        csp = res.headers['Content-Security-Policy']
+        assert "default-src 'self'" in csp
+        assert "frame-ancestors 'self'" in csp
+        assert res.headers.get('X-Content-Type-Options') == 'nosniff'
+        assert res.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+
+    def test_esp_dimensions_dos_protection(self, client, isolated_db):
+        """Verify ESP dimensions exceeding safe bounds are rejected with 400."""
+        # Oversized single grid
+        res = client.post('/api/esp/', json={'ip': '192.168.1.150', 'rows': 500, 'cols': 500})
+        assert res.status_code == 400
+        assert 'safe bounds' in res.get_json()['error']
+
+        # Zero or negative dimensions
+        res = client.post('/api/esp/', json={'ip': '192.168.1.150', 'rows': 0, 'cols': 10})
+        assert res.status_code == 400
+
+        # Excessive sections (> 50)
+        sections = [{'rows': 2, 'cols': 2} for _ in range(55)]
+        res = client.post('/api/esp/', json={'ip': '192.168.1.150', 'sections': sections})
+        assert res.status_code == 400
+        assert 'maximum sections limit' in res.get_json()['error']

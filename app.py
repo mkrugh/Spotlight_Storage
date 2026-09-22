@@ -4,6 +4,7 @@ import json
 import os
 import re
 import socket
+import sys
 import threading
 import time
 import urllib.parse
@@ -33,6 +34,12 @@ app.previous_positions = {}  # last located LED positions, per ESP IP
 app.off_timers = {}  # pending turn-off timers, per ESP IP
 app.state_lock = threading.Lock()  # thread-safe lock for concurrent WSGI threads
 app.request_amount = 0
+
+# Initialize database schema and indexes once at app startup
+try:
+    db.init_db()
+except Exception as e:
+    print(f"Notice: initial db.init_db() deferred or bypassed: {e}")
 
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_PROXY_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB proxy buffer limit
@@ -101,6 +108,17 @@ def set_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://code.jquery.com https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https: http: blob:; "
+        "font-src 'self' https://cdn.jsdelivr.net; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'self';"
+    )
     return response
 
 
@@ -232,19 +250,58 @@ def is_valid_url_or_ip(input_str):
     return bool(url_pattern.match(host))
 
 
+def is_safe_esp_target(input_str: str) -> bool:
+    """Validate that target IP/host is safe for ESP connection test (blocks loopback, cloud metadata, link-local)."""
+    if not input_str or not isinstance(input_str, str):
+        return False
+    parts = input_str.strip().split(':')
+    host = parts[0].strip().lower()
+
+    if host in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+        return False
+
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast or ip_obj.is_unspecified:
+            return False
+        # Explicit check for cloud metadata service
+        if str(ip_obj) == '169.254.169.254':
+            return False
+    except ValueError:
+        # Hostname (e.g. wled.local, esp32.lan)
+        if host.startswith('127.') or host == 'localhost':
+            return False
+
+    return True
+
+
+
+def get_current_settings():
+    """Read settings from database in a thread-safe manner, returning a dict of active values."""
+    settings = db.read_settings() or {}
+    brightness = (settings.get('brightness', 100) or 100) / 100
+    timeout = settings.get('timeout', 5) or 5
+    colors = settings.get('colors') or ["#00ff00", "#00ff00"]
+    standby_color = colors[0] if isinstance(colors, list) and len(colors) >= 1 else "#00ff00"
+    locate_color = colors[1] if isinstance(colors, list) and len(colors) >= 2 else "#00ff00"
+
+    with app.state_lock:
+        app.brightness = brightness
+        app.timeout = timeout
+        app.standbyColor = standby_color
+        app.locateColor = locate_color
+
+    return {
+        'brightness': brightness,
+        'timeout': timeout,
+        'standbyColor': standby_color,
+        'locateColor': locate_color
+    }
+
 
 def set_global_settings():
-    settings = db.read_settings()
-
-    if settings:
-        app.brightness = settings['brightness'] / 100
-        app.timeout = settings['timeout']
-
-        colors = settings.get('colors')
-        # Assign colors
-        if isinstance(colors, list) and len(colors) >= 2:
-            app.standbyColor = colors[0]
-            app.locateColor = colors[1]
+    """Update global settings cache in a thread-safe manner."""
+    return get_current_settings()
 
 
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -266,6 +323,38 @@ def settings():
             return jsonify({'error': f'Failed to update settings: {e}'}), 400
 
 
+def validate_esp_dimensions(data):
+    """Ensure rows and cols do not exceed safe operational bounds to prevent DoS."""
+    if not isinstance(data, dict):
+        return False, "Invalid payload format"
+    sections = data.get('sections')
+    if isinstance(sections, list) and len(sections) > 0:
+        if len(sections) > 50:
+            return False, "Exceeded maximum sections limit (50)"
+        for idx, sec in enumerate(sections):
+            if isinstance(sec, dict):
+                r = sec.get('rows', 1)
+                c = sec.get('cols', 1)
+                try:
+                    r, c = int(r), int(c)
+                except (ValueError, TypeError):
+                    return False, f"Invalid dimension numbers in section {idx+1}"
+                if r <= 0 or c <= 0 or r > 100 or c > 100 or (r * c) > 10000:
+                    return False, f"Section {idx+1} dimensions out of safe bounds (max 100x100, 10000 total)"
+    else:
+        r = data.get('rows')
+        c = data.get('cols')
+        if r is not None and c is not None:
+            try:
+                r, c = int(r), int(c)
+            except (ValueError, TypeError):
+                return False, "Invalid dimension numbers"
+            if r <= 0 or c <= 0 or r > 100 or c > 100 or (r * c) > 10000:
+                return False, "Dimensions out of safe bounds (max 100x100, 10000 total)"
+    return True, None
+
+
+@app.route('/api/esp', methods=['GET', 'POST'])
 @app.route('/api/esp/', methods=['GET', 'POST'])
 def esps():
     if request.method == 'GET':
@@ -281,6 +370,10 @@ def esps():
             esp_data = request.get_json(silent=True)
             if not esp_data or not isinstance(esp_data, dict):
                 return jsonify({"error": "No data provided"}), 400
+
+            is_valid, err = validate_esp_dimensions(esp_data)
+            if not is_valid:
+                return jsonify({"error": err}), 400
 
             id = db.write_esp_settings(esp_data)
             if id is None:
@@ -346,6 +439,9 @@ def test_esp_connection():
 
     if not is_valid_url_or_ip(ip):
         return jsonify({"success": False, "error": f"'{ip}' is not a valid IP address or hostname format."}), 400
+
+    if not is_safe_esp_target(ip):
+        return jsonify({"success": False, "error": f"'{ip}' is not an allowed target IP address or hostname."}), 400
 
     try:
         url = f"http://{ip}/json/info"
@@ -425,7 +521,12 @@ def handle_esp(id):
             return jsonify({'error': 'ESP not found'}), 404
 
     elif request.method == 'PUT':
-        esp_data = request.get_json()
+        esp_data = request.get_json(silent=True)
+        if not esp_data or not isinstance(esp_data, dict):
+            return jsonify({'error': 'No data provided'}), 400
+        is_valid, err = validate_esp_dimensions(esp_data)
+        if not is_valid:
+            return jsonify({'error': err}), 400
         db.update_esp_settings(id, esp_data)
         return jsonify({'success': True})
 
@@ -986,7 +1087,25 @@ def get_languages():
 
 
 
+@app.route('/api/vendor/check-updates', methods=['GET'])
+def check_vendor_updates():
+    """Check vendored frontend libraries for available updates."""
+    try:
+        # Import the check function from scripts/update_vendor.py
+        scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
+        sys.path.insert(0, scripts_dir)
+        from update_vendor import check_updates_api
+        sys.path.pop(0)
 
+        manifest_path = os.path.join(
+            os.path.dirname(__file__), 'static', 'vendor', 'vendor_manifest.json'
+        )
+        result = check_updates_api(manifest_path)
+        return jsonify(result), 200
+    except FileNotFoundError:
+        return jsonify({'error': 'Vendor manifest not found'}), 404
+    except Exception as e:
+        return jsonify({'error': f'Update check failed: {str(e)}'}), 500
 
 
 

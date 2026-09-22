@@ -97,7 +97,13 @@ let isForcingClose = false;
 
 function getCurrentBuildPartsData() {
     const rows = document.querySelectorAll('#build-parts-list .build-part-row');
-    return Array.from(rows).map(row => {
+    return Array.from(rows).filter(row => {
+        const hiddenInput = row.querySelector('.build-part-id');
+        const searchInput = row.querySelector('.build-part-search-input');
+        const idVal = (hiddenInput ? hiddenInput.value : '')?.trim() || '';
+        const searchVal = (searchInput ? searchInput.value : '')?.trim() || '';
+        return Boolean(idVal || searchVal);
+    }).map(row => {
         const hiddenInput = row.querySelector('.build-part-id');
         const qtyInput = row.querySelector('.build-part-qty');
         return {
@@ -109,11 +115,18 @@ function getCurrentBuildPartsData() {
 
 function hasUnsavedBuildParts() {
     const rows = document.querySelectorAll('#build-parts-list .build-part-row');
+    const usedRows = Array.from(rows).filter(row => {
+        const hiddenInput = row.querySelector('.build-part-id');
+        const searchInput = row.querySelector('.build-part-search-input');
+        const idVal = (hiddenInput ? hiddenInput.value : '')?.trim() || '';
+        const searchVal = (searchInput ? searchInput.value : '')?.trim() || '';
+        return Boolean(idVal || searchVal);
+    });
     const currentName = (document.getElementById('build-name-input')?.value || '').trim();
 
     if (editingBuildId === null) {
-        // In a new build: if ANY parts were added or a name entered, it's unsaved!
-        return rows.length > 0 || currentName.length > 0;
+        // In a new build: if ANY filled/touched parts were added or a name entered, it's unsaved!
+        return usedRows.length > 0 || currentName.length > 0;
     } else {
         // In edit mode: compare against initial loaded state
         const currentParts = getCurrentBuildPartsData();
@@ -218,12 +231,16 @@ function safeEscape(str) {
         .replace(/'/g, '&#39;');
 }
 
+let buildPartRowCounter = 0;
+
 function addPartRow(items, selectedItemId, qty) {
     const allItems = (items && items.length > 0) ? items
         : (typeof fetchedItems !== 'undefined' ? fetchedItems : []);
 
     const selectedItem = selectedItemId ? allItems.find(i => String(i.id) === String(selectedItemId)) : null;
     const initialName = selectedItem ? selectedItem.name : '';
+    const rowId = ++buildPartRowCounter;
+    const menuId = `build-part-menu-${rowId}`;
 
     const row = document.createElement('div');
     row.className = 'd-flex align-items-center mb-2 build-part-row flex-wrap gap-2';
@@ -233,14 +250,14 @@ function addPartRow(items, selectedItemId, qty) {
             <input type="text" class="form-control form-control-sm build-part-search-input" 
                    placeholder="Search by part name or tag..." value="${safeEscape(initialName)}" 
                    autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" 
-                   aria-haspopup="listbox" aria-label="Search part by name or tag">
-            <div class="build-part-search-menu shadow-sm" role="listbox" style="display: none;"></div>
+                   aria-controls="${menuId}" aria-haspopup="listbox" aria-label="Search part by name or tag">
+            <div class="build-part-search-menu shadow-sm" id="${menuId}" role="listbox" style="display: none;"></div>
         </div>
         <div class="d-flex align-items-center gap-1.5 flex-shrink-0">
             <span class="small text-muted">Need:</span>
             <input type="number" class="form-control form-control-sm build-part-qty" style="width:70px" min="1" value="${qty || 1}">
         </div>
-        <span class="part-stock-badge border text-nowrap flex-shrink-0" id="part-stock-badge">Select a part</span>
+        <span class="part-stock-badge border text-nowrap flex-shrink-0">Select a part</span>
         <button type="button" class="btn btn-outline-danger btn-sm btn-remove-part flex-shrink-0" title="Remove part">
             <i data-lucide="trash" style="width:14px;height:14px;"></i>
         </button>
@@ -251,13 +268,14 @@ function addPartRow(items, selectedItemId, qty) {
     const searchInput = row.querySelector('.build-part-search-input');
     const searchMenu = row.querySelector('.build-part-search-menu');
     const qtyInput = row.querySelector('.build-part-qty');
-    const stockBadge = row.querySelector('#part-stock-badge');
+    const stockBadge = row.querySelector('.part-stock-badge');
 
     let activeIndex = -1;
 
     function closeDropdown() {
         searchMenu.style.display = 'none';
         searchInput.setAttribute('aria-expanded', 'false');
+        searchInput.removeAttribute('aria-activedescendant');
         activeIndex = -1;
     }
 
@@ -286,8 +304,10 @@ function addPartRow(items, selectedItemId, qty) {
                 const tags = getItemTagsArray(item);
                 const tagsHtml = tags.map(t => `<span class="badge bg-body-secondary text-body border fw-normal me-1 mb-0.5" style="font-size:0.68rem; padding:0.15em 0.4em;">#${safeEscape(t)}</span>`).join('');
                 const isSelected = String(item.id) === String(hiddenInput.value);
+                const optionId = `${menuId}-opt-${idx}`;
                 return `
                     <div class="build-part-search-item ${isSelected ? 'active' : ''}" 
+                         id="${optionId}"
                          role="option" aria-selected="${isSelected ? 'true' : 'false'}"
                          data-item-id="${safeEscape(item.id)}" data-item-name="${safeEscape(item.name)}" data-index="${idx}">
                         <div class="d-flex flex-column overflow-hidden me-2" style="min-width: 0;">
@@ -352,13 +372,19 @@ function addPartRow(items, selectedItemId, qty) {
                 activeIndex = (activeIndex + 1) % itemsList.length;
                 itemsList.forEach((el, idx) => el.classList.toggle('highlighted', idx === activeIndex));
                 const curr = searchMenu.querySelector(`[data-index="${activeIndex}"]`);
-                if (curr) curr.scrollIntoView({ block: 'nearest' });
+                if (curr) {
+                    curr.scrollIntoView({ block: 'nearest' });
+                    searchInput.setAttribute('aria-activedescendant', curr.id);
+                }
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 activeIndex = (activeIndex - 1 + itemsList.length) % itemsList.length;
                 itemsList.forEach((el, idx) => el.classList.toggle('highlighted', idx === activeIndex));
                 const curr = searchMenu.querySelector(`[data-index="${activeIndex}"]`);
-                if (curr) curr.scrollIntoView({ block: 'nearest' });
+                if (curr) {
+                    curr.scrollIntoView({ block: 'nearest' });
+                    searchInput.setAttribute('aria-activedescendant', curr.id);
+                }
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 if (activeIndex >= 0 && activeIndex < itemsList.length) {
@@ -377,9 +403,19 @@ function addPartRow(items, selectedItemId, qty) {
         }
     });
 
+    // Use mousedown so selection completes before input focusout triggers
+    searchMenu.addEventListener('mousedown', (e) => {
+        const itemEl = e.target.closest('.build-part-search-item');
+        if (itemEl) {
+            e.preventDefault();
+            selectItem(itemEl.dataset.itemId, itemEl.dataset.itemName);
+        }
+    });
+
     searchMenu.addEventListener('click', (e) => {
         const itemEl = e.target.closest('.build-part-search-item');
         if (itemEl) {
+            e.preventDefault();
             selectItem(itemEl.dataset.itemId, itemEl.dataset.itemName);
         }
     });
@@ -413,6 +449,19 @@ function saveBuild() {
         return;
     }
 
+    // First: Prune completely blank part rows (where both part id and search input are empty)
+    const existingRows = document.querySelectorAll('#build-parts-list .build-part-row');
+    existingRows.forEach(row => {
+        const hiddenInput = row.querySelector('.build-part-id');
+        const searchInput = row.querySelector('.build-part-search-input');
+        const idVal = (hiddenInput ? hiddenInput.value : '')?.trim();
+        const searchVal = (searchInput ? searchInput.value : '')?.trim();
+        if (!idVal && !searchVal) {
+            row.remove();
+        }
+    });
+
+    // Re-query rows after pruning
     const rows = document.querySelectorAll('#build-parts-list .build-part-row');
     if (rows.length > 0) {
         const unselectedRow = Array.from(rows).some(row => {

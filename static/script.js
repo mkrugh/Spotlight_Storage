@@ -58,6 +58,14 @@ function showToast(message, type = 'info', title = null, duration = 3500) {
     const container = document.getElementById('app-toast-container');
     if (!container) return;
 
+    if (typeof container.showPopover === 'function') {
+        try {
+            container.showPopover();
+        } catch (e) {
+            // If already open, ignore
+        }
+    }
+
     let iconHtml = '';
     let borderCls = '';
     switch (type) {
@@ -80,10 +88,14 @@ function showToast(message, type = 'info', title = null, duration = 3500) {
             break;
     }
 
+    const isUrgent = (type === 'danger' || type === 'error' || type === 'warning');
+    const roleAttr = isUrgent ? 'alert' : 'status';
+    const liveAttr = isUrgent ? 'assertive' : 'polite';
+
     const toastEl = document.createElement('div');
     toastEl.className = `toast app-toast ${borderCls} show fade align-items-center mb-2`;
-    toastEl.setAttribute('role', 'alert');
-    toastEl.setAttribute('aria-live', 'assertive');
+    toastEl.setAttribute('role', roleAttr);
+    toastEl.setAttribute('aria-live', liveAttr);
     toastEl.setAttribute('aria-atomic', 'true');
 
     if (title) {
@@ -95,13 +107,13 @@ function showToast(message, type = 'info', title = null, duration = 3500) {
                 </div>
                 <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
-            <div class="toast-body small text-body">${message}</div>
+            <div class="toast-body small text-body">${escapeHtml(message)}</div>
         `;
     } else {
         toastEl.innerHTML = `
             <div class="app-toast-content">
                 <div class="d-flex align-items-center flex-shrink-0">${iconHtml}</div>
-                <div class="toast-body small flex-grow-1 text-body">${message}</div>
+                <div class="toast-body small flex-grow-1 text-body">${escapeHtml(message)}</div>
                 <button type="button" class="btn-close btn-close-sm flex-shrink-0" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
         `;
@@ -672,7 +684,7 @@ function renderPlacementDrawerList(placementIssues) {
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-shrink-0">
                         <span class="badge ${badgeClass} rounded-pill d-none d-sm-inline">${badgeText}</span>
-                        <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Assign bin location">
+                        <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 text-nowrap" data-action="assign-placement" data-item-id="${item.id}" title="Assign bin location">
                             <span class="small">Assign Bin</span>
                         </button>
                     </div>
@@ -710,11 +722,11 @@ function renderOutOfStockDrawerList(outOfStockItems) {
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" onclick="quickRestockItem(${item.id})" title="Add 1 to stock">
+                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" data-action="quick-restock" data-item-id="${item.id}" title="Add 1 to stock">
                             <i data-lucide="plus" class="icon-n4px"></i>
                             <span class="small">+1</span>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Edit item">
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" data-action="assign-placement" data-item-id="${item.id}" title="Edit item">
                             <span class="small">Edit</span>
                         </button>
                     </div>
@@ -752,11 +764,11 @@ function renderLowStockDrawerList(lowStockItems) {
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" onclick="quickRestockItem(${item.id})" title="Add 1 to stock">
+                        <button type="button" class="btn btn-sm btn-outline-success py-1 px-2 text-nowrap d-inline-flex align-items-center gap-1" data-action="quick-restock" data-item-id="${item.id}" title="Add 1 to stock">
                             <i data-lucide="plus" class="icon-n4px"></i>
                             <span class="small">+1</span>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" onclick="openAssignPlacement(${item.id})" title="Edit item">
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" data-action="assign-placement" data-item-id="${item.id}" title="Edit item">
                             <span class="small">Edit</span>
                         </button>
                     </div>
@@ -1593,7 +1605,7 @@ function updateEmptyState(visibleCount, totalCount) {
             </div>
             <h5 class="fw-semibold text-body-secondary mb-1" id="empty-state-title">No matching items found</h5>
             <p class="text-muted small mb-3" id="empty-state-desc">Try adjusting your search terms, changing tag filters, or add a new part.</p>
-            <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick="DialogManager.open('item-modal')">
+            <button type="button" class="btn btn-outline-primary btn-sm px-3" data-action="open-item-modal">
                 <span class="icon-n4px me-1"><i data-lucide="plus"></i></span>
                 <span>Add Item</span>
             </button>`;
@@ -2208,3 +2220,25 @@ if (document.readyState === 'loading') {
 } else {
     initStatusPillsSettings();
 }
+
+// Event delegation for bottom unassigned/health drawer actions (C2 XSS hardening)
+document.getElementById('unassigned-drawer')?.addEventListener('click', (e) => {
+    const assignBtn = e.target.closest('[data-action="assign-placement"]');
+    if (assignBtn && assignBtn.dataset.itemId) {
+        openAssignPlacement(assignBtn.dataset.itemId);
+        return;
+    }
+    const restockBtn = e.target.closest('[data-action="quick-restock"]');
+    if (restockBtn && restockBtn.dataset.itemId) {
+        quickRestockItem(restockBtn.dataset.itemId);
+        return;
+    }
+});
+
+// Event delegation for items grid empty state "Add Item" button
+document.getElementById('items-container-grid')?.addEventListener('click', (e) => {
+    const modalBtn = e.target.closest('[data-action="open-item-modal"]');
+    if (modalBtn && window.DialogManager) {
+        DialogManager.open('item-modal');
+    }
+});

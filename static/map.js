@@ -13,6 +13,37 @@ document.addEventListener('DOMContentLoaded', function () {
             currentSelectedLed = null;
         });
     }
+
+    // Delegated click handler for controller picker
+    document.getElementById('map-esp-picker')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="select-esp"]');
+        if (!btn || !btn.dataset.espId) return;
+        const targetEsp = (window.ESPs || []).find(x => String(x.id) === String(btn.dataset.espId));
+        if (targetEsp) showMapForEsp(targetEsp);
+    });
+
+    // Delegated click handler for drawer grid cards
+    document.getElementById('map-drawer-grid-view')?.addEventListener('click', (e) => {
+        const card = e.target.closest('.map-drawer-card');
+        if (card && card.dataset.led !== undefined) {
+            selectDrawer(parseInt(card.dataset.led, 10));
+        }
+    });
+
+    // Delegated click handler for orphaned / out-of-bounds side panel
+    document.getElementById('map-side-panel')?.addEventListener('click', (e) => {
+        const reassignBtn = e.target.closest('[data-action="reassign-item"]');
+        if (reassignBtn && reassignBtn.dataset.itemId) {
+            if (window.openAssignPlacement) window.openAssignPlacement(reassignBtn.dataset.itemId);
+            return;
+        }
+        const openDrawerBtn = e.target.closest('[data-action="open-placement-drawer"]');
+        if (openDrawerBtn) {
+            if (window.DialogManager) DialogManager.close('map-modal');
+            if (window.openPlacementDrawer) window.openPlacementDrawer();
+            return;
+        }
+    });
 });
 
 document.getElementById('open-map-btn')?.addEventListener('click', openMapModal);
@@ -119,7 +150,7 @@ function showEspPicker() {
     document.getElementById('map-modal-title').textContent = 'Select a storage location';
     document.getElementById('map-esp-picker').innerHTML =
         ESPs.map(e =>
-            `<button class="btn btn-outline-secondary me-2 mb-2" onclick="showMapForEsp(ESPs.find(x=>x.id==${e.id}))">${escapeHtml(e.name)}</button>`
+            `<button class="btn btn-outline-secondary me-2 mb-2" data-action="select-esp" data-esp-id="${escapeHtml(String(e.id))}">${escapeHtml(e.name)}</button>`
         ).join('');
     document.getElementById('map-esp-picker').classList.remove('d-none');
     document.getElementById('map-canvas-container').classList.add('d-none');
@@ -330,7 +361,7 @@ function renderOrphanInspector(orphanedList, esp, totalDrawers) {
                 </div>
                 <div class="d-flex align-items-center justify-content-between mt-1">
                     <span class="small text-danger" style="font-size:0.75rem;">Exceeds limit (${totalDrawers})</span>
-                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:0.75rem;" onclick="if(window.openAssignPlacement) window.openAssignPlacement('${itemId}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:0.75rem;" data-action="reassign-item" data-item-id="${escapeHtml(String(itemId))}">
                         Reassign
                     </button>
                 </div>
@@ -353,7 +384,7 @@ function renderOrphanInspector(orphanedList, esp, totalDrawers) {
             <div class="overflow-auto pe-1" style="max-height: 260px;">
                 ${itemsHtml}
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="if(window.openPlacementDrawer) { if(window.DialogManager) DialogManager.close('map-modal'); window.openPlacementDrawer(); }">
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" data-action="open-placement-drawer">
                 Open Placement Drawer
             </button>
         </div>
@@ -367,7 +398,7 @@ function createDrawerCardHtml(ledNum, items, isSelected) {
 
     if (isEmpty) {
         return `
-            <div class="map-drawer-card map-drawer-empty ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}" onclick="selectDrawer(${ledNum})">
+            <div class="map-drawer-card map-drawer-empty ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}">
                 <div class="drawer-bin-num">#${paddedNum}</div>
                 <div class="text-center small font-italic opacity-75 my-auto text-truncate" style="font-size:0.72rem;">Empty</div>
                 <div style="height: 6px;"></div>
@@ -381,7 +412,7 @@ function createDrawerCardHtml(ledNum, items, isSelected) {
     const qty = parseInt(primary.quantity, 10) || 0;
 
     return `
-        <div class="map-drawer-card ${isLow ? 'map-drawer-low' : 'map-drawer-occupied'} ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}" onclick="selectDrawer(${ledNum})">
+        <div class="map-drawer-card ${isLow ? 'map-drawer-low' : 'map-drawer-occupied'} ${isSelected ? 'drawer-selected' : ''}" data-led="${ledNum}">
             <div class="d-flex align-items-center justify-content-between overflow-hidden text-nowrap" style="min-width:0;">
                 <span class="drawer-bin-num flex-shrink-0">#${paddedNum}</span>
                 <div class="d-flex align-items-center gap-1 flex-shrink-0">

@@ -438,8 +438,8 @@ function populateSortTagsMenu(tagDataArray) {
     searchLi.innerHTML = `
         <div class="input-group input-group-sm">
             <span class="input-group-text bg-body-tertiary border-end-0 py-0 px-2"><i data-lucide="search" style="width: 14px; height: 14px;"></i></span>
-            <input type="text" class="form-control border-start-0 ps-1 py-1" id="dropdown-tag-search-input" placeholder="Search tags..." value="${typeof escapeHtml === 'function' ? escapeHtml(tagMenuSearchQuery) : tagMenuSearchQuery}" style="font-size: 0.8rem;">
-            <button class="btn btn-outline-secondary py-0 px-2 ${tagMenuSearchQuery ? '' : 'd-none'}" type="button" id="dropdown-tag-search-clear"><i data-lucide="x" style="width: 12px; height: 12px;"></i></button>
+            <input type="text" class="form-control border-start-0 ps-1 py-1" id="dropdown-tag-search-input" placeholder="Search tags..." aria-label="Search tags" value="${typeof escapeHtml === 'function' ? escapeHtml(tagMenuSearchQuery) : tagMenuSearchQuery}" style="font-size: 0.8rem;">
+            <button class="btn btn-outline-secondary py-0 px-2 ${tagMenuSearchQuery ? '' : 'd-none'}" type="button" id="dropdown-tag-search-clear" aria-label="Clear tag search"><i data-lucide="x" style="width: 12px; height: 12px;"></i></button>
         </div>
     `;
     sortTagsMenu.appendChild(searchLi);

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import shutil
@@ -8,18 +9,35 @@ from collections import Counter
 COMBINED_DATABASE = os.getenv('COMBINED_DATABASE', 'data/combined_data.db')
 
 
-def create_combined_db():
-    # Ensure the database directory exists if specified
-    db_dir = os.path.dirname(COMBINED_DATABASE)
+def get_db_connection(database_name=None):
+    """Function to get a database connection with WAL mode, foreign keys, and Row factory."""
+    db_path = database_name or COMBINED_DATABASE
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.OperationalError:
+        pass
+    return conn
+
+
+def init_db(database_name=None):
+    """Initialize database tables, schema migrations, and performance indexes once."""
+    db_path = database_name or COMBINED_DATABASE
+    db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir)  # Connect to the combined database
+        os.makedirs(db_dir, exist_ok=True)
 
-    conn_combined = sqlite3.connect(COMBINED_DATABASE)
-    conn_combined.row_factory = sqlite3.Row
-    conn_combined.execute("PRAGMA foreign_keys = ON")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            pass
 
-    # Create items table in the combined database
-    conn_combined.execute('''
+        # Create items table
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT,
@@ -33,8 +51,8 @@ def create_combined_db():
             )
         ''')
 
-    # Create esp table in the combined database
-    conn_combined.execute('''
+        # Create esp table
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS esp (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT,
@@ -48,8 +66,8 @@ def create_combined_db():
             )
         ''')
 
-    # Create settings table in the combined database
-    conn_combined.execute('''
+        # Create settings table
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 brightness INTEGER DEFAULT 100,
@@ -60,16 +78,16 @@ def create_combined_db():
             )
         ''')
 
-    # Create builds table
-    conn_combined.execute('''
+        # Create builds table
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS builds (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL
             )
         ''')
 
-    # Create build_items table
-    conn_combined.execute('''
+        # Create build_items table
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS build_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 build_id INTEGER NOT NULL,
@@ -79,50 +97,56 @@ def create_combined_db():
             )
         ''')
 
-    # Commit the changes
-    conn_combined.commit()
+        # Commit base schema
+        conn.commit()
 
-    # Check and add new columns if they don't exist
-    cursor = conn_combined.cursor()
+        # Check and add new columns if they don't exist
+        cursor = conn.cursor()
 
-    # Check for the existence of 'colors' and 'language' column in settings
-    cursor.execute("PRAGMA table_info(settings)")
-    columns = [column[1] for column in cursor.fetchall()]
-    if 'colors' not in columns:
-        cursor.execute("ALTER TABLE settings ADD COLUMN colors TEXT DEFAULT '[\"#00ff00\", \"#00ff00\"]'")
-        conn_combined.commit()
-    if 'language' not in columns:
-        cursor.execute("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'en'")
-        conn_combined.commit()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'colors' not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN colors TEXT DEFAULT '[\"#00ff00\", \"#00ff00\"]'")
+            conn.commit()
+        if 'language' not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'en'")
+            conn.commit()
 
-    # Check for the existence of 'sections' column in esp
-    cursor.execute("PRAGMA table_info(esp)")
-    esp_columns = [column[1] for column in cursor.fetchall()]
-    if 'sections' not in esp_columns:
-        cursor.execute("ALTER TABLE esp ADD COLUMN sections TEXT")
-        conn_combined.commit()
+        cursor.execute("PRAGMA table_info(esp)")
+        esp_columns = [column[1] for column in cursor.fetchall()]
+        if 'sections' not in esp_columns:
+            cursor.execute("ALTER TABLE esp ADD COLUMN sections TEXT")
+            conn.commit()
 
-    # Check for the existence of 'min_quantity' column in items
-    cursor.execute("PRAGMA table_info(items)")
-    items_columns = [column[1] for column in cursor.fetchall()]
-    if 'min_quantity' not in items_columns:
-        cursor.execute("ALTER TABLE items ADD COLUMN min_quantity INTEGER DEFAULT 3")
-        conn_combined.commit()
+        cursor.execute("PRAGMA table_info(items)")
+        items_columns = [column[1] for column in cursor.fetchall()]
+        if 'min_quantity' not in items_columns:
+            cursor.execute("ALTER TABLE items ADD COLUMN min_quantity INTEGER DEFAULT 3")
+            conn.commit()
 
-    return conn_combined
+        # Create missing performance indexes (M3)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_esp_ip ON esp(esp_ip)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_esp_name ON esp(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_items_name ON items(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_build_items_build_id ON build_items(build_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_build_items_item_id ON build_items(item_id)")
+        conn.commit()
+
+
+def create_combined_db():
+    """Backward-compatible helper. Ensures DB is initialized and returns connection."""
+    init_db(COMBINED_DATABASE)
+    return get_db_connection(COMBINED_DATABASE)
 
 
 # Function to read the data from the database
 def read_items():
-    conn = create_combined_db()
-    items = conn.execute('SELECT * FROM items').fetchall()
-    conn.close()
-    return [dict(item) for item in items]
+    with contextlib.closing(get_db_connection()) as conn:
+        items = conn.execute('SELECT * FROM items').fetchall()
+        return [dict(item) for item in items]
 
 
 def write_item(item):
-    conn = create_combined_db()
-    cursor = conn.cursor()
     min_qty = item.get('min_quantity')
     if min_qty is None or str(min_qty).strip() == '':
         min_qty = 3
@@ -132,34 +156,32 @@ def write_item(item):
         except (ValueError, TypeError):
             min_qty = 3
 
-    cursor.execute('INSERT INTO items (name, link, image, position, quantity, min_quantity, ip, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                   [item['name'], item.get('link', ''), item.get('image', ''), item.get('position', '[]'),
-                    item.get('quantity', 0), min_qty, item.get('ip', ''), item.get('tags', '')])
-    lastId = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return lastId
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO items (name, link, image, position, quantity, min_quantity, ip, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [item['name'], item.get('link', ''), item.get('image', ''), item.get('position', '[]'),
+             item.get('quantity', 0), min_qty, item.get('ip', ''), item.get('tags', '')]
+        )
+        last_id = cursor.lastrowid
+        conn.commit()
+        return last_id
 
 
 def update_item_image(item_id, new_image_url):
-    conn = create_combined_db()
-    try:
-        cursor = conn.cursor()
-        # Update the image of the item with the specified item_id
-        cursor.execute('UPDATE items SET image = ? WHERE id = ?', [new_image_url['image'], item_id])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        print(e)
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE items SET image = ? WHERE id = ?', [new_image_url['image'], item_id])
+            conn.commit()
+        except sqlite3.Error as e:
+            conn.rollback()
+            print(e)
+            raise
 
 
 # Function to update data in the database
 def update_item(id, data):
-    conn = create_combined_db()
-
     min_qty = data.get('min_quantity')
     if min_qty is None or str(min_qty).strip() == '':
         min_qty = 3
@@ -169,48 +191,47 @@ def update_item(id, data):
         except (ValueError, TypeError):
             min_qty = 3
 
-    try:
-        conn.execute(
-            'UPDATE items SET name = ?, link = ?, image = ?, position = ?, quantity = ?, min_quantity = ?, ip = ?, tags = ? WHERE id = ?',
-            [data['name'], data['link'], data['image'], data['position'], data['quantity'], min_qty, data['ip'], data['tags'],
-             id])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute(
+                'UPDATE items SET name = ?, link = ?, image = ?, position = ?, quantity = ?, min_quantity = ?, ip = ?, tags = ? WHERE id = ?',
+                [data['name'], data['link'], data['image'], data['position'], data['quantity'], min_qty, data['ip'], data['tags'], id]
+            )
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def update_item_quantity(id, data):
-    conn = create_combined_db()
-    try:
-
-        conn.execute(
-            'UPDATE items SET  quantity = ? WHERE id = ?',
-            [data['quantity'], id])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        print(e)
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute(
+                'UPDATE items SET quantity = ? WHERE id = ?',
+                [data['quantity'], id]
+            )
+            conn.commit()
+        except sqlite3.Error as e:
+            conn.rollback()
+            print(e)
+            raise
 
 
 def get_item(id):
-    conn = create_combined_db()
-    item = conn.execute('SELECT * FROM items WHERE id = ?', [id]).fetchone()
-    conn.close()
-    return dict(item) if item else None
+    with contextlib.closing(get_db_connection()) as conn:
+        item = conn.execute('SELECT * FROM items WHERE id = ?', [id]).fetchone()
+        return dict(item) if item else None
 
 
 def delete_item(id):
-    conn = create_combined_db()
-    conn.execute('DELETE FROM build_items WHERE item_id = ?', [id])
-    conn.execute('DELETE FROM items WHERE id = ?', [id])
-    conn.commit()
-    conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute('DELETE FROM build_items WHERE item_id = ?', [id])
+            conn.execute('DELETE FROM items WHERE id = ?', [id])
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def _format_esp_dict(row):
@@ -255,31 +276,28 @@ def write_esp_settings(esp_settings):
 
     sections_str = json.dumps(sections) if sections else None
 
-    conn = create_combined_db()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT INTO esp (name, esp_ip, rows, cols, start_top, start_left, serpentine_direction, sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                esp_settings['name'],
-                esp_settings['esp_ip'],
-                int(esp_settings['rows']),
-                int(esp_settings['cols']),
-                esp_settings['startTop'],
-                esp_settings['startLeft'],
-                esp_settings['serpentineDirection'],
-                sections_str
-            ])
-        lastId = cursor.lastrowid
-        conn.commit()
-    except Exception as e:
-        print(f"Database error: {e}")
-        conn.rollback()
-        lastId = None
-    finally:
-        conn.close()
-
-    return lastId
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO esp (name, esp_ip, rows, cols, start_top, start_left, serpentine_direction, sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                    esp_settings['name'],
+                    esp_settings['esp_ip'],
+                    int(esp_settings['rows']),
+                    int(esp_settings['cols']),
+                    esp_settings['startTop'],
+                    esp_settings['startLeft'],
+                    esp_settings['serpentineDirection'],
+                    sections_str
+                ])
+            last_id = cursor.lastrowid
+            conn.commit()
+            return last_id
+        except Exception as e:
+            print(f"Database error: {e}")
+            conn.rollback()
+            return None
 
 
 # Function to update ESP settings in the database
@@ -299,174 +317,144 @@ def update_esp_settings(id, esp_settings):
 
     sections_str = json.dumps(sections) if sections else None
 
-    conn = create_combined_db()
-    try:
-        conn.execute(
-            'UPDATE esp SET name = ?, esp_ip = ?, rows = ?, cols = ?, start_top = ?, start_left = ?, serpentine_direction = ?, sections = ? WHERE id = ?',
-            [
-                esp_settings['name'],
-                esp_settings['esp_ip'],
-                int(esp_settings['rows']),
-                int(esp_settings['cols']),
-                esp_settings['startTop'],
-                esp_settings['startLeft'],
-                esp_settings['serpentineDirection'],
-                sections_str,
-                id
-            ])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute(
+                'UPDATE esp SET name = ?, esp_ip = ?, rows = ?, cols = ?, start_top = ?, start_left = ?, serpentine_direction = ?, sections = ? WHERE id = ?',
+                [
+                    esp_settings['name'],
+                    esp_settings['esp_ip'],
+                    int(esp_settings['rows']),
+                    int(esp_settings['cols']),
+                    esp_settings['startTop'],
+                    esp_settings['startLeft'],
+                    esp_settings['serpentineDirection'],
+                    sections_str,
+                    id
+                ])
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 # Function to get ESP settings from the database by ID
 def get_esp_settings(id):
-    conn = create_combined_db()
-    esp_settings = conn.execute('SELECT * FROM esp WHERE id = ?', [id]).fetchone()
-    conn.close()
-    if esp_settings:
-        return _format_esp_dict(esp_settings)
-    else:
-        return None  # Return None if no matching settings are found
+    with contextlib.closing(get_db_connection()) as conn:
+        esp_settings = conn.execute('SELECT * FROM esp WHERE id = ?', [id]).fetchone()
+        if esp_settings:
+            return _format_esp_dict(esp_settings)
+        return None
 
 
 def read_esp():
-    conn = create_combined_db()
-    esps = conn.execute('SELECT * FROM esp').fetchall()
-    conn.close()
-    return [_format_esp_dict(esp) for esp in esps]
+    with contextlib.closing(get_db_connection()) as conn:
+        esps = conn.execute('SELECT * FROM esp').fetchall()
+        return [_format_esp_dict(esp) for esp in esps]
 
 
 # Function to delete ESP settings from the database by ID
 def delete_esp_settings(id):
-    conn = create_combined_db()
-    try:
-        conn.execute('DELETE FROM esp WHERE id = ?', [id])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute('DELETE FROM esp WHERE id = ?', [id])
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def get_esp_settings_by_id(id):
-    conn = create_combined_db()  # Get a database connection
-    try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM esp WHERE id = ?', (id,))
-        row = cursor.fetchone()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM esp WHERE id = ?', (id,))
+            row = cursor.fetchone()
 
-        if row is None:
-            return None  # No record found for the given IP
+            if row is None:
+                return None
 
-        # Convert the row to a dictionary
-        esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+            esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+            return _format_esp_dict(esp_settings)
 
-        return _format_esp_dict(esp_settings)
-
-    except Exception as e:
-        print(f"Database error: {e}")
-        return None
-
-    finally:
-        conn.close()
+        except Exception as e:
+            print(f"Database error: {e}")
+            return None
 
 
 def get_esp_settings_by_ip(ip):
-    conn = create_combined_db()  # Get a database connection
-    try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM esp WHERE esp_ip = ?', (ip,))
-        row = cursor.fetchone()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM esp WHERE esp_ip = ?', (ip,))
+            row = cursor.fetchone()
 
-        if row is None:
-            return None  # No record found for the given IP
+            if row is None:
+                return None
 
-        # Convert the row to a dictionary
-        esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
-        return _format_esp_dict(esp_settings)
+            esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+            return _format_esp_dict(esp_settings)
 
-    except Exception as e:
-        print(f"Database error: {e}")
-        return None
-
-    finally:
-        conn.close()
+        except Exception as e:
+            print(f"Database error: {e}")
+            return None
 
 
 def get_ip_by_name(esp_name):
-    conn = create_combined_db()
-    esp = conn.execute('SELECT esp_ip FROM esp WHERE name = ?', (esp_name,)).fetchone()
-    conn.close()
-    return esp['esp_ip'] if esp else None
+    with contextlib.closing(get_db_connection()) as conn:
+        esp = conn.execute('SELECT esp_ip FROM esp WHERE name = ?', (esp_name,)).fetchone()
+        return esp['esp_ip'] if esp else None
 
 
 # Function to read settings from the database
 def read_settings():
-    conn = create_combined_db()
-    try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM settings')
-        settings = cursor.fetchone()
-        if settings is None:
-            print("No settings found in the database.")
-            return {
-                'brightness': 100,
-                'timeout': 5,
-                'lightMode': 'light',
-                'colors': ['#ffff00', '#00ffff'],
-                'language': 'en'
-            }
-        else:
-            # Convert the settings row to a dictionary
-            settings_dict = dict(zip([column[0] for column in cursor.description], settings))
-            # Deserialize the colors field if it exists
-            if 'colors' in settings_dict:
-                try:
-                    settings_dict['colors'] = json.loads(settings_dict['colors'])
-                except (ValueError, TypeError):
-                    # Older databases may contain an invalid default like '[#00ff00, #00ff00]'
-                    settings_dict['colors'] = ['#00ff00', '#00ff00']
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM settings')
+            settings = cursor.fetchone()
+            if settings is None:
+                return {
+                    'brightness': 100,
+                    'timeout': 5,
+                    'lightMode': 'light',
+                    'colors': ['#ffff00', '#00ffff'],
+                    'language': 'en'
+                }
             else:
-                print("No 'colors' field found in the settings.")
-            return settings_dict
-    except sqlite3.Error as e:
-        print(f"SQLite error while reading settings: {e}")
-        return {}
-    finally:
-        conn.close()
+                settings_dict = dict(zip([column[0] for column in cursor.description], settings))
+                if 'colors' in settings_dict:
+                    try:
+                        settings_dict['colors'] = json.loads(settings_dict['colors'])
+                    except (ValueError, TypeError):
+                        settings_dict['colors'] = ['#00ff00', '#00ff00']
+                return settings_dict
+        except sqlite3.Error as e:
+            print(f"SQLite error while reading settings: {e}")
+            return {}
 
 
 # Function to update settings in the database
 def update_settings(settings):
-    try:
-        # Serialize the colors list to a JSON string
-        settings['colors'] = json.dumps(settings['colors'])
-        conn = create_combined_db()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM settings')  # Clear existing settings
-        cursor.execute('''
-            INSERT INTO settings (brightness, timeout, lightMode, colors, language)
-            VALUES (?, ?, ?, ?, ?)
-        ''', [settings['brightness'], settings['timeout'], settings['lightMode'], settings['colors'], settings['language']])
-        conn.commit()
-    except sqlite3.Error as e:
-        print(f"SQLite error while updating settings: {e}")
-        raise
-    finally:
-        conn.close()
+    colors_json = json.dumps(settings['colors'])
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM settings')
+            cursor.execute('''
+                INSERT INTO settings (brightness, timeout, lightMode, colors, language)
+                VALUES (?, ?, ?, ?, ?)
+            ''', [settings['brightness'], settings['timeout'], settings['lightMode'], colors_json, settings['language']])
+            conn.commit()
+        except sqlite3.Error as e:
+            print(f"SQLite error while updating settings: {e}")
+            conn.rollback()
+            raise
 
 
 def get_all_tags():
-    conn = create_combined_db()
-    cursor = conn.cursor()
-
-    try:
-        # Fetch all distinct tags from the items table
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
         cursor.execute('SELECT tags FROM items')
         raw_tags = [tag['tags'] for tag in cursor.fetchall() if tag['tags']]
 
@@ -481,105 +469,96 @@ def get_all_tags():
                     tags.append(parsed.strip())
             except (json.JSONDecodeError, TypeError, ValueError):
                 tags.extend(set(t.strip() for t in raw_tag.split(',') if t.strip()))
-        # Count the occurrences of each tag
         tag_counts = Counter(tags)
         unique_tags_with_count = [{'tag': tag, 'count': count} for tag, count in tag_counts.items()]
         unique_tags_with_count.sort(key=lambda x: x['count'], reverse=True)
         return unique_tags_with_count
-    finally:
-        conn.close()
 
 
 def read_builds():
-    conn = create_combined_db()
-    builds = conn.execute('SELECT * FROM builds').fetchall()
-    conn.close()
-    return [dict(b) for b in builds]
+    with contextlib.closing(get_db_connection()) as conn:
+        builds = conn.execute('SELECT * FROM builds').fetchall()
+        return [dict(b) for b in builds]
 
 
 def write_build(name):
-    conn = create_combined_db()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO builds (name) VALUES (?)', [name])
-    last_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return last_id
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO builds (name) VALUES (?)', [name])
+        last_id = cursor.lastrowid
+        conn.commit()
+        return last_id
 
 
 def update_build_name(build_id, name):
-    conn = create_combined_db()
-    try:
-        conn.execute('UPDATE builds SET name = ? WHERE id = ?', [name, build_id])
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute('UPDATE builds SET name = ? WHERE id = ?', [name, build_id])
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def delete_build(build_id):
-    conn = create_combined_db()
-    conn.execute('DELETE FROM builds WHERE id = ?', [build_id])
-    conn.commit()
-    conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute('DELETE FROM builds WHERE id = ?', [build_id])
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def get_build_items(build_id):
-    conn = create_combined_db()
-    rows = conn.execute(
-        '''SELECT bi.id, bi.item_id, bi.quantity_needed,
-                  i.name, i.quantity, i.image
-           FROM build_items bi
-           JOIN items i ON bi.item_id = i.id
-           WHERE bi.build_id = ?''',
-        [build_id]
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with contextlib.closing(get_db_connection()) as conn:
+        rows = conn.execute(
+            '''SELECT bi.id, bi.item_id, bi.quantity_needed,
+                      i.name, i.quantity, i.image
+               FROM build_items bi
+               JOIN items i ON bi.item_id = i.id
+               WHERE bi.build_id = ?''',
+            [build_id]
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def set_build_items(build_id, items):
-    conn = create_combined_db()
-    try:
-        conn.execute('DELETE FROM build_items WHERE build_id = ?', [build_id])
-        for item in items:
-            conn.execute(
-                'INSERT INTO build_items (build_id, item_id, quantity_needed) VALUES (?, ?, ?)',
-                [build_id, item['item_id'], item['quantity_needed']]
-            )
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            conn.execute('DELETE FROM build_items WHERE build_id = ?', [build_id])
+            for item in items:
+                conn.execute(
+                    'INSERT INTO build_items (build_id, item_id, quantity_needed) VALUES (?, ?, ?)',
+                    [build_id, item['item_id'], item['quantity_needed']]
+                )
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 def execute_build(build_id):
-    conn = create_combined_db()
-    try:
-        rows = conn.execute(
-            'SELECT bi.item_id, bi.quantity_needed, i.quantity, i.name '
-            'FROM build_items bi JOIN items i ON bi.item_id = i.id '
-            'WHERE bi.build_id = ?', [build_id]
-        ).fetchall()
+    with contextlib.closing(get_db_connection()) as conn:
+        try:
+            rows = conn.execute(
+                'SELECT bi.item_id, bi.quantity_needed, i.quantity, i.name '
+                'FROM build_items bi JOIN items i ON bi.item_id = i.id '
+                'WHERE bi.build_id = ?', [build_id]
+            ).fetchall()
 
-        warnings = []
-        for row in rows:
-            if row['quantity'] < row['quantity_needed']:
-                warnings.append({'name': row['name'], 'have': row['quantity'], 'need': row['quantity_needed']})
-            new_qty = max(0, row['quantity'] - row['quantity_needed'])
-            conn.execute('UPDATE items SET quantity = ? WHERE id = ?', [new_qty, row['item_id']])
+            warnings = []
+            for row in rows:
+                if row['quantity'] < row['quantity_needed']:
+                    warnings.append({'name': row['name'], 'have': row['quantity'], 'need': row['quantity_needed']})
+                new_qty = max(0, row['quantity'] - row['quantity_needed'])
+                conn.execute('UPDATE items SET quantity = ? WHERE id = ?', [new_qty, row['item_id']])
 
-        conn.commit()
-        return warnings
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+            conn.commit()
+            return warnings
+        except sqlite3.Error:
+            conn.rollback()
+            raise
 
 
 # Migration only needed if you are coming from an older version.
@@ -587,13 +566,6 @@ def execute_build(build_id):
 DATABASE = 'data.db'
 DATABASE_ESP = 'esp.db'
 DATABASE_SETTING = 'settings.db'
-
-
-def get_db_connection(database_name):
-    """Function to get a database connection."""
-    conn = sqlite3.connect(database_name)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def migrate_items():

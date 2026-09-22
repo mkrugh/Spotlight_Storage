@@ -3,23 +3,22 @@ let cropper = null;  // Store Cropper instance globally
 
 
 async function uploadImage() {
-    const formData = new FormData();
     const fileInput = document.getElementById("item_image_upload");
-    // Append the file input to the formData
-    formData.append('file', fileInput.files[0]);
-
-    // returns undefined if no file is selected
-    if (!fileInput.files[0]) {
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
         console.log('no file uploaded');
         return null;
     }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
     try {
         const response = await fetch('/upload', { body: formData, method: 'POST' });
         if (!response.ok) {
             throw new Error(`Upload failed with status ${response.status}`);
         }
         const imageURL = await response.text();
-        return new URL(window.location.href + imageURL);
+        return new URL(imageURL, window.location.origin).href;
     } catch (error) {
         console.error('Error uploading file:', error);
         alert('Image upload failed. Only png, jpg, jpeg, gif and webp files are allowed.');

@@ -29,6 +29,7 @@ window.DialogManager = (function() {
         
         // With dialog covering the full screen (like Bootstrap .modal),
         // clicking outside .modal-dialog hits the <dialog> element directly.
+        // Also verify the click did not originate from a child element (e.g. nested click)
         if (event.target === dialogEl) {
             closeDialog(dialogEl.id);
         }

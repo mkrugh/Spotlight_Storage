@@ -41,7 +41,7 @@ class TestStaticAssets:
     def test_all_static_javascript_files_non_empty(self):
         """Verify all core JavaScript files in static/ exist and have valid content."""
         expected_scripts = [
-            'images.js', 'script.js', 'esp.js', 'tags.js',
+            'images.js', 'dialog-manager.js', 'script.js', 'esp.js', 'tags.js',
             'settings.js', 'gen_grid.js', 'color-modes.js',
             'builds.js', 'map.js', 'translation.js'
         ]
@@ -55,3 +55,27 @@ class TestStaticAssets:
         favicon_path = os.path.join(STATIC_DIR, 'favicon.png')
         assert os.path.exists(favicon_path)
         assert os.path.getsize(favicon_path) > 0
+
+    def test_vendor_libraries_exist_and_valid(self):
+        """Verify all self-hosted vendor libraries exist and are non-trivially sized."""
+        vendor_files = {
+            'vendor/bootstrap/css/bootstrap.min.css': 100000,
+            'vendor/bootstrap/js/bootstrap.bundle.min.js': 50000,
+            'vendor/tagify/tagify.css': 5000,
+            'vendor/tagify/tagify.min.js': 30000,
+            'vendor/tagify/tagify.polyfills.min.js': 1000,
+            'vendor/lucide/lucide.min.js': 100000,
+            'vendor/jquery/jquery.min.js': 80000,
+            'vendor/cropperjs/cropper.min.css': 2000,
+            'vendor/cropperjs/cropper.min.js': 20000,
+        }
+        for rel_path, min_bytes in vendor_files.items():
+            full_path = os.path.join(STATIC_DIR, rel_path)
+            assert os.path.isfile(full_path), (
+                f"Vendor file missing: {rel_path}"
+            )
+            actual_size = os.path.getsize(full_path)
+            assert actual_size >= min_bytes, (
+                f"Vendor file too small: {rel_path} is {actual_size} bytes, "
+                f"expected at least {min_bytes}"
+            )
