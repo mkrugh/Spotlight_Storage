@@ -803,7 +803,8 @@ function renderMapItems(ledNum, items) {
 let currentMapContext = null;
 
 function setupMapHoverTracking(esp, isMulti, boxDim, lw, startX, startY, serpDir, normalizedSections) {
-    currentMapContext = { esp, isMulti, boxDim, lw, startX, startY, serpDir, normalizedSections };
+    const occupancy = buildOccupancyMap(esp);
+    currentMapContext = { esp, isMulti, boxDim, lw, startX, startY, serpDir, normalizedSections, occupancy };
     const canvas = document.getElementById('map-responsive-canvas');
     const container = document.getElementById('map-canvas-container');
     const highlight = document.getElementById('map-cell-highlight');
@@ -813,7 +814,10 @@ function setupMapHoverTracking(esp, isMulti, boxDim, lw, startX, startY, serpDir
     if (canvas.dataset.hoverInitialized === 'true') return;
     canvas.dataset.hoverInitialized = 'true';
 
-    canvas.addEventListener('pointermove', function (e) {
+    let mapRafPending = false;
+    let lastPointerEvent = null;
+
+    function processMapHover(e) {
         if (!currentMapContext) return;
         const ctx = currentMapContext;
         const rect = canvas.getBoundingClientRect();
@@ -887,7 +891,7 @@ function setupMapHoverTracking(esp, isMulti, boxDim, lw, startX, startY, serpDir
         highlight.style.height = `${cell.pixelH}px`;
         highlight.classList.remove('d-none');
 
-        const occupancy = buildOccupancyMap(ctx.esp);
+        const occupancy = ctx.occupancy || (ctx.occupancy = buildOccupancyMap(ctx.esp));
         const itemsAtPos = occupancy[cell.ledNumber] || [];
         let statusBadge = '';
         let subtitle = '';
@@ -919,9 +923,22 @@ function setupMapHoverTracking(esp, isMulti, boxDim, lw, startX, startY, serpDir
             tooltip.style.transform = 'translate(-50%, -100%)';
         }
         tooltip.classList.remove('d-none');
+    }
+
+    canvas.addEventListener('pointermove', function (e) {
+        lastPointerEvent = e;
+        if (mapRafPending) return;
+        mapRafPending = true;
+        requestAnimationFrame(() => {
+            if (lastPointerEvent) {
+                processMapHover(lastPointerEvent);
+            }
+            mapRafPending = false;
+        });
     });
 
     canvas.addEventListener('pointerleave', function () {
+        lastPointerEvent = null;
         highlight.classList.add('d-none');
         tooltip.classList.add('d-none');
     });

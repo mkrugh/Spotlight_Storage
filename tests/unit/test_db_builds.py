@@ -15,6 +15,31 @@ class TestDbBuilds:
         assert len(builds) == 1
         assert builds[0]['name'] == 'Macro Keyboard V1'
 
+    def test_read_builds_include_parts(self, isolated_db):
+        item1_id = db.write_item({'name': 'Resistor', 'quantity': 100})
+        item2_id = db.write_item({'name': 'Capacitor', 'quantity': 50})
+        b1_id = db.write_build('Amplifier')
+        b2_id = db.write_build('Filter')
+
+        db.set_build_items(b1_id, [{'item_id': item1_id, 'quantity_needed': 10}])
+        db.set_build_items(b2_id, [{'item_id': item2_id, 'quantity_needed': 5}])
+
+        # Without include_parts: backward compatible, no 'items' key
+        builds_plain = db.read_builds(include_parts=False)
+        assert len(builds_plain) == 2
+        assert 'items' not in builds_plain[0]
+
+        # With include_parts: 'items' list populated
+        builds_with_parts = db.read_builds(include_parts=True)
+        assert len(builds_with_parts) == 2
+        b1 = next(b for b in builds_with_parts if b['id'] == b1_id)
+        b2 = next(b for b in builds_with_parts if b['id'] == b2_id)
+        assert len(b1['items']) == 1
+        assert b1['items'][0]['item_id'] == item1_id
+        assert b1['items'][0]['quantity_needed'] == 10
+        assert len(b2['items']) == 1
+        assert b2['items'][0]['item_id'] == item2_id
+
     def test_update_build_name(self, isolated_db):
         build_id = db.write_build('Old Build Name')
         db.update_build_name(build_id, 'New Build Name')

@@ -191,3 +191,34 @@ def test_toast_popover_layering_above_modal(ui_page):
     assert info['toastRect']['bottom'] <= info['windowHeight']
     assert info['toastRect']['right'] <= info['windowWidth']
     assert info['toastRect']['left'] > (info['windowWidth'] / 2)
+
+
+def test_toast_fallback_inside_dialog_without_popover(ui_page):
+    """
+    Verify fallback behavior when browser does not support HTML Popover API:
+    Toasts are dynamically injected into a container inside the active <dialog>
+    so they remain visible above the native dialog top-layer.
+    """
+    page = ui_page
+
+    # Open modal dialog
+    page.click('#open-builds-btn')
+    page.wait_for_selector('#builds-list-modal', state='visible')
+
+    # Simulate browser lacking Popover API and trigger toast
+    page.evaluate("""() => {
+        delete HTMLElement.prototype.showPopover;
+        delete HTMLElement.prototype.togglePopover;
+    }""")
+
+    page.evaluate("showToast('Fallback inside active dialog', 'warning')")
+
+    # Verify toast container was created inside the active dialog
+    page.wait_for_selector('#builds-list-modal .dialog-toast-container .toast', state='visible')
+    toast_text = page.locator('#builds-list-modal .dialog-toast-container .toast').text_content()
+    assert 'Fallback inside active dialog' in toast_text
+
+    # Close dialog and verify cleanup
+    page.evaluate("DialogManager.close('builds-list-modal')")
+    page.wait_for_function("!document.querySelector('#builds-list-modal .dialog-toast-container')")
+

@@ -54,18 +54,36 @@ let isCopyingItem = false;
 let editingItemId = null; // Track the ID of the item being edited
 let editingItemIP = null; // Track the IP of the item being edited
 
+function hasPopoverSupport() {
+    return typeof HTMLElement.prototype.togglePopover === 'function' &&
+           typeof HTMLElement.prototype.showPopover === 'function';
+}
+
 // UI-13: Toast Notification System
 function showToast(message, type = 'info', title = null, duration = 3500) {
-    const container = document.getElementById('app-toast-container');
-    if (!container) return;
+    const activeDialog = window.DialogManager?.getActiveDialog?.();
+    let container = document.getElementById('app-toast-container');
 
-    if (typeof container.showPopover === 'function') {
-        try {
-            container.showPopover();
-        } catch (e) {
-            // If already open, ignore
+    if (activeDialog && !hasPopoverSupport()) {
+        // Fallback for legacy browsers lacking Popover API: inject toast inside active modal dialog
+        let dialogToastContainer = activeDialog.querySelector('.dialog-toast-container');
+        if (!dialogToastContainer) {
+            dialogToastContainer = document.createElement('div');
+            dialogToastContainer.className = 'dialog-toast-container';
+            activeDialog.appendChild(dialogToastContainer);
+        }
+        container = dialogToastContainer;
+    } else {
+        if (!container) return;
+        if (typeof container.showPopover === 'function') {
+            try {
+                container.showPopover();
+            } catch (e) {
+                // If already open, ignore
+            }
         }
     }
+    if (!container) return;
 
     let iconHtml = '';
     let borderCls = '';
@@ -1171,6 +1189,194 @@ function locateItem(item) {
     });
 }
 
+async function deleteItemCard(item, col, triggerEl) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Item',
+        message: `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
+        confirmText: 'Delete Item',
+        confirmBtnClass: 'btn-danger'
+    });
+    if (!confirmed) return;
+
+    const id = item.id;
+    const itemsContainer = document.getElementById('items-container-grid');
+    // Delete item from database
+    fetch(`/api/items/${id}`, { method: "DELETE" })
+        .then(() => {
+            const idx = fetchedItems.findIndex(i => i.id == id);
+            if (idx !== -1) {
+                fetchedItems.splice(idx, 1);
+            }
+            const cardCol = col || itemsContainer?.querySelector(`div[data-id="${id}"]`);
+            if (cardCol) cardCol.parentNode.removeChild(cardCol);
+            if (triggerEl && typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                const deleteTooltip = bootstrap.Tooltip.getInstance(triggerEl);
+                if (deleteTooltip) {
+                    deleteTooltip.hide();
+                }
+            }
+            fetchDataAndLoadTags();
+            if (typeof updatePlacementHealthUI === 'function') {
+                updatePlacementHealthUI();
+            }
+            if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
+                drawMapCanvas(currentMapEsp);
+            }
+            showToast(`Item "${item.name}" was deleted.`, 'success');
+        })
+        .catch((error) => {
+            console.error(error);
+            showToast(`Failed to delete "${item.name}".`, 'danger');
+        });
+}
+
+function openEditModal(item) {
+    resetModal(true);
+    isEditingItem = true;
+    isCopyingItem = false;
+    editingItemId = item.id;
+    editingItemIP = item.ip;
+
+    const modalLabel = document.getElementById("item-modal-label");
+    if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.edit_btn_label) ? translation.edit_btn_label : "Edit Item";
+    const saveBtnLabel = document.getElementById("item_add_btn_label");
+    if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.save_btn_label) ? translation.save_btn_label : "Save";
+
+    document.getElementById("item_name").value = item.name || "";
+    document.getElementById("item_url").value = item.link || "";
+    document.getElementById("item_image").value = item.image || "";
+    document.getElementById("item_quantity").value = item.quantity;
+    if (document.getElementById("item_min_quantity")) {
+        document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
+    }
+    if (typeof updateItemImagePreview === 'function') {
+        updateItemImagePreview(item.image || '');
+    }
+
+    // Set LED positions for editing
+    const parsedPos = parsePositionsArray(item.position);
+    localStorage.setItem('led_positions', JSON.stringify(parsedPos));
+    clickedCells = [...parsedPos];
+    localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
+    localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
+
+    // Set item tags for editing
+    let itemTagsArray = [];
+    if (item.tags) {
+        try {
+            const parsed = JSON.parse(item.tags);
+            if (Array.isArray(parsed)) itemTagsArray = parsed;
+            else if (typeof parsed === 'string') itemTagsArray = [parsed];
+        } catch (e) {
+            const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
+            itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
+        }
+    }
+    localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
+    if (typeof loadTagsIntoTagify === 'function') {
+        loadTagsIntoTagify(itemTagsArray);
+    }
+
+    DialogManager.open('item-modal');
+}
+
+function openCopyModal(item) {
+    resetModal(true);
+    isCopyingItem = true;
+    isEditingItem = false;
+    editingItemId = null;
+    editingItemIP = item.ip;
+
+    const modalLabel = document.getElementById("item-modal-label");
+    if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.add_item) ? translation.add_item : "Add Item";
+    const saveBtnLabel = document.getElementById("item_add_btn_label");
+    if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
+
+    document.getElementById("item_name").value = item.name || "";
+    document.getElementById("item_url").value = item.link || "";
+    document.getElementById("item_image").value = item.image || "";
+    document.getElementById("item_quantity").value = item.quantity;
+    if (document.getElementById("item_min_quantity")) {
+        document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
+    }
+    if (typeof updateItemImagePreview === 'function') {
+        updateItemImagePreview(item.image || '');
+    }
+    // Set LED positions for copying
+    const parsedPos = parsePositionsArray(item.position);
+    localStorage.setItem('led_positions', JSON.stringify(parsedPos));
+    clickedCells = [...parsedPos];
+    localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
+    localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
+    // Set item tags for copying
+    let itemTagsArray = [];
+    if (item.tags) {
+        try {
+            const parsed = JSON.parse(item.tags);
+            if (Array.isArray(parsed)) itemTagsArray = parsed;
+            else if (typeof parsed === 'string') itemTagsArray = [parsed];
+        } catch (e) {
+            const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
+            itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
+        }
+    }
+    localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
+    if (typeof loadTagsIntoTagify === 'function') {
+        loadTagsIntoTagify(itemTagsArray);
+    }
+    DialogManager.open('item-modal');
+}
+
+function openCropModal(item) {
+    const imageElement = document.getElementById('imageToCrop');
+    const image = item.image;
+    const cropImageModal = document.getElementById('cropImageModal');
+    const downloadButton = document.getElementById('download-image-btn');
+
+    // Set the dataset attributes
+    cropImageModal.dataset.item = JSON.stringify(item);
+
+    if (isValidUrl(image)) {
+        // Fetch the image from the backend instead of setting the URL directly
+        fetchWithTimeout(`/proxy-image?url=${encodeURIComponent(image)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                imageElement.src = URL.createObjectURL(blob);
+
+                // Set up the download button
+                downloadButton.style.display = 'block';
+
+                // Assign click handler for downloading the image
+                downloadButton.onclick = function() {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = image.split('/').pop() || 'downloaded_image';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                };
+
+                DialogManager.open('cropImageModal');
+            })
+            .catch(error => {
+                console.error('Error fetching image:', error);
+                alert('Unable to load image. Please try a different Image URL.');
+            });
+    } else {
+        // Directly use the local image path
+        imageElement.src = image;
+        downloadButton.style.display = 'none';
+        DialogManager.open('cropImageModal');
+    }
+}
+
 // Function to create an HTML element representing an item
 function createItem(item) {
     // Create a new column element for fluid CSS grid
@@ -1209,11 +1415,11 @@ function createItem(item) {
 
     const placeholderClass = hasImage ? '' : 'placeholder-img-container';
 
-    // Set inner HTML for the created column
+    // Set inner HTML for the created column with data-action attributes for event delegation
     col.innerHTML = `
     <div class="card item-card position-relative shadow-sm">
         <!-- Image container with badges -->
-        <div class="card-img-container ${placeholderClass} position-relative">
+        <div class="card-img-container ${placeholderClass} position-relative" data-action="locate-img" data-item-id="${item.id}">
             <div class="card-badges-header">
                 ${locationBadgeHtml ? `<div>${locationBadgeHtml}</div>` : '<div></div>'}
                 <span id="stock-badge-${item.id}" class="stock-badge ${stockConfig.cls}">${stockConfig.text}</span>
@@ -1234,11 +1440,11 @@ function createItem(item) {
 
             <!-- Action buttons: Primary Locate button + Ghost secondary buttons -->
             <div class="d-flex align-items-center gap-1 mb-2">
-                <button class="btn btn-locate locate-btn flex-grow-1 py-1 px-2 d-flex align-items-center justify-content-center gap-1" id="locate-btn-${item.id}" data-bs-toggle="tooltip" title="Locate in drawer" data-item-id="${item.id}">
+                <button class="btn btn-locate locate-btn flex-grow-1 py-1 px-2 d-flex align-items-center justify-content-center gap-1" id="locate-btn-${item.id}" data-bs-toggle="tooltip" title="Locate in drawer" data-item-id="${item.id}" data-action="locate">
                     <span class="icon-n4px"><i data-lucide="lightbulb"></i></span>
                     <span class="small fw-semibold">Locate</span>
                 </button>
-                <button class="btn btn-outline-secondary btn-card-ghost edit-btn p-1" id="edit-btn-${item.id}" data-bs-toggle="tooltip" title="Edit">
+                <button class="btn btn-outline-secondary btn-card-ghost edit-btn p-1" id="edit-btn-${item.id}" data-bs-toggle="tooltip" title="Edit" data-item-id="${item.id}" data-action="edit">
                     <span class="icon-n4px"><i data-lucide="file-edit"></i></span>
                 </button>
 
@@ -1248,262 +1454,29 @@ function createItem(item) {
                         <span class="icon-n4px"><i data-lucide="more-vertical"></i></span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuButton-${item.id}">
-                        <li><a id="copy_item_${item.id}" class="dropdown-item copy-btn" href="#">Copy Item</a></li>
-                        <li><a id="delete_item_${item.id}" class="dropdown-item delete-btn" href="#">Delete</a></li>
-                        <li><a id="crop_image_${item.id}" class="dropdown-item image-edit-btn" href="#">Crop Image</a></li>
+                        <li><a id="copy_item_${item.id}" class="dropdown-item copy-btn" href="#" data-item-id="${item.id}" data-action="copy">Copy Item</a></li>
+                        <li><a id="delete_item_${item.id}" class="dropdown-item delete-btn" href="#" data-item-id="${item.id}" data-action="delete">Delete</a></li>
+                        <li><a id="crop_image_${item.id}" class="dropdown-item image-edit-btn" href="#" data-item-id="${item.id}" data-action="crop">Crop Image</a></li>
                     </ul>
                 </div>
             </div>
 
             <!-- Modern Stepper Pill with Accessible Touch Targets -->
             <div class="mt-auto d-flex align-items-center justify-content-between qty-pill-container">
-                <button class="btn btn-outline-danger qty-btn minus-btn" id="minus-btn-${item.id}" data-bs-toggle="tooltip" title="-1 from stock" data-item-id="${item.id}">
+                <button class="btn btn-outline-danger qty-btn minus-btn" id="minus-btn-${item.id}" data-bs-toggle="tooltip" title="-1 from stock" data-item-id="${item.id}" data-action="minus">
                     &minus;
                 </button>
                 <div class="qty-display-wrapper">
                     <span id="quantity-${item.id}" class="qty-display-val">${item.quantity}</span>
                     <span class="qty-display-label">pcs</span>
                 </div>
-                <button class="btn btn-outline-success qty-btn plus-btn" id="plus-btn-${item.id}" data-bs-toggle="tooltip" title="+1 to stock" data-item-id="${item.id}">
+                <button class="btn btn-outline-success qty-btn plus-btn" id="plus-btn-${item.id}" data-bs-toggle="tooltip" title="+1 to stock" data-item-id="${item.id}" data-action="plus">
                     &plus;
                 </button>
             </div>
         </div>
     </div>`;
 
-    // Add event listeners for quantity change, locating, deleting, and editing
-    col.querySelector('.minus-btn').addEventListener('click', () => {
-        handleQuantityChange(item, -1); // Decrease quantity by 1
-    });
-
-    col.querySelector('.plus-btn').addEventListener('click', () => {
-        handleQuantityChange(item, 1); // Increase quantity by 1
-    });
-
-    const imgContainer = col.querySelector('.card-img-container');
-    if (imgContainer) {
-        imgContainer.addEventListener('click', (e) => {
-            if (e.target.closest('.stock-badge') || e.target.closest('.location-badge')) return;
-            locateItem(item);
-        });
-    }
-
-    col.querySelector('.locate-btn').addEventListener('click', () => {
-        locateItem(item);
-    });
-
-    col.querySelector('.delete-btn').addEventListener('click', async () => {
-        const confirmed = await showConfirmModal({
-            title: 'Delete Item',
-            message: `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
-            confirmText: 'Delete Item',
-            confirmBtnClass: 'btn-danger'
-        });
-        if (!confirmed) return;
-
-        const id = item.id;
-        const itemsContainer = document.getElementById('items-container-grid');
-        // Delete item from database
-        fetch(`/api/items/${id}`, { method: "DELETE" })
-            .then(() => {
-                const idx = fetchedItems.findIndex(i => i.id == id);
-                if (idx !== -1) {
-                    fetchedItems.splice(idx, 1);
-                }
-                const cardCol = itemsContainer.querySelector(`div[data-id="${id}"]`);
-                if (cardCol) cardCol.parentNode.removeChild(cardCol);
-                const deleteTooltip = bootstrap.Tooltip.getInstance(col.querySelector('.delete-btn'));
-                if (deleteTooltip) {
-                    deleteTooltip.hide();
-                }
-                fetchDataAndLoadTags();
-                if (typeof updatePlacementHealthUI === 'function') {
-                    updatePlacementHealthUI();
-                }
-                if (typeof mapModalVisible !== 'undefined' && mapModalVisible && currentMapEsp) {
-                    drawMapCanvas(currentMapEsp);
-                }
-                showToast(`Item "${item.name}" was deleted.`, 'success');
-            })
-            .catch((error) => {
-                console.error(error);
-                showToast(`Failed to delete "${item.name}".`, 'danger');
-            });
-    });
-
-    col.querySelector('.copy-btn').addEventListener('click', () => {
-        resetModal(true);
-        isCopyingItem = true;
-        isEditingItem = false;
-        editingItemId = null;
-        editingItemIP = item.ip;
-
-        const modalLabel = document.getElementById("item-modal-label");
-        if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.add_item) ? translation.add_item : "Add Item";
-        const saveBtnLabel = document.getElementById("item_add_btn_label");
-        if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
-
-        document.getElementById("item_name").value = item.name || "";
-        document.getElementById("item_url").value = item.link || "";
-        document.getElementById("item_image").value = item.image || "";
-        document.getElementById("item_quantity").value = item.quantity;
-        if (document.getElementById("item_min_quantity")) {
-            document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
-        }
-        if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview(item.image || '');
-        }
-        // Set LED positions for copying
-        const parsedPos = parsePositionsArray(item.position);
-        localStorage.setItem('led_positions', JSON.stringify(parsedPos));
-        clickedCells = [...parsedPos];
-        localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
-        localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
-        // Set item tags for copying
-        let itemTagsArray = [];
-        if (item.tags) {
-            try {
-                const parsed = JSON.parse(item.tags);
-                if (Array.isArray(parsed)) itemTagsArray = parsed;
-                else if (typeof parsed === 'string') itemTagsArray = [parsed];
-            } catch (e) {
-                const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
-                itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
-            }
-        }
-        localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
-        if (typeof loadTagsIntoTagify === 'function') {
-            loadTagsIntoTagify(itemTagsArray);
-        }
-        DialogManager.open('item-modal');
-    });
-    col.querySelector('.image-edit-btn').addEventListener('click', () => {
-        const imageElement = document.getElementById('imageToCrop');
-        const image = item.image;
-        const cropImageModal = document.getElementById('cropImageModal');
-        const downloadButton = document.getElementById('download-image-btn'); // Get the download button
-
-        // Set the dataset attributes
-        cropImageModal.dataset.item = JSON.stringify(item);
-
-        if (isValidUrl(image)) {
-            // Fetch the image from the backend instead of setting the URL directly
-            fetchWithTimeout(`/proxy-image?url=${encodeURIComponent(image)}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
-                    return response.blob();
-                })
-                .then(blob => {
-                    imageElement.src = URL.createObjectURL(blob);
-
-                    // Set up the download button
-                    downloadButton.style.display = 'block'; // Make the button visible
-
-                    // Add click event listener for downloading the image
-                    downloadButton.addEventListener('click', function() {
-                        const url = window.URL.createObjectURL(blob);
-                        // Create a temporary link element
-                        const link = document.createElement('a');
-                        link.href = url;
-                        // Extract the filename from the image URL or set a default name
-                        link.download = image.split('/').pop() || 'downloaded_image';
-                        // Append the link to the document body
-                        document.body.appendChild(link);
-                        // Programmatically trigger the download
-                        link.click();
-                        // Clean up by revoking the Blob URL and removing the link element
-                        document.body.removeChild(link);
-                        window.URL.revokeObjectURL(url);
-                    });
-
-                    DialogManager.open('cropImageModal');
-                })
-                .catch(error => {
-                    console.error('Error fetching image:', error);
-                    alert('Unable to load image. Please try a different Image URL.');
-                });
-        } else {
-            // Directly use the local image path
-            imageElement.src = image;
-            downloadButton.style.display = 'none'; // Hide the download button for local images
-            DialogManager.open('cropImageModal');
-        }
-    });
-
-
-
-
-    col.querySelector('.edit-btn').addEventListener('click', () => {
-        resetModal(true);
-        isEditingItem = true;
-        isCopyingItem = false;
-        editingItemId = item.id;
-        editingItemIP = item.ip;
-
-        const modalLabel = document.getElementById("item-modal-label");
-        if (modalLabel) modalLabel.textContent = (typeof translation !== 'undefined' && translation.edit_btn_label) ? translation.edit_btn_label : "Edit Item";
-        const saveBtnLabel = document.getElementById("item_add_btn_label");
-        if (saveBtnLabel) saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.save_btn_label) ? translation.save_btn_label : "Save";
-
-        document.getElementById("item_name").value = item.name || "";
-        document.getElementById("item_url").value = item.link || "";
-        document.getElementById("item_image").value = item.image || "";
-        document.getElementById("item_quantity").value = item.quantity;
-        if (document.getElementById("item_min_quantity")) {
-            document.getElementById("item_min_quantity").value = (item.min_quantity !== undefined && item.min_quantity !== null) ? item.min_quantity : 3;
-        }
-        if (typeof updateItemImagePreview === 'function') {
-            updateItemImagePreview(item.image || '');
-        }
-
-        // Set LED positions for editing
-        const parsedPos = parsePositionsArray(item.position);
-        localStorage.setItem('led_positions', JSON.stringify(parsedPos));
-        clickedCells = [...parsedPos];
-        localStorage.setItem('edit_led_positions', JSON.stringify(parsedPos));
-        localStorage.setItem('edit_image_path', JSON.stringify(item.image || ''));
-
-        // Set item tags for editing
-        let itemTagsArray = [];
-        if (item.tags) {
-            try {
-                const parsed = JSON.parse(item.tags);
-                if (Array.isArray(parsed)) itemTagsArray = parsed;
-                else if (typeof parsed === 'string') itemTagsArray = [parsed];
-            } catch (e) {
-                const cleanedTags = item.tags.replace(/[\[\]'"`\\]/g, '');
-                itemTagsArray = cleanedTags.split(',').map(t => t.trim()).filter(Boolean);
-            }
-        }
-        localStorage.setItem('item_tags', JSON.stringify(itemTagsArray));
-        if (typeof loadTagsIntoTagify === 'function') {
-            loadTagsIntoTagify(itemTagsArray);
-        }
-
-        DialogManager.open('item-modal');
-    });
-
-    // Elevate z-index of card and grid column when dropdown menu is open
-    const dropdownBtn = col.querySelector(`#dropdownMenuButton-${item.id}`);
-    const cardEl = col.querySelector('.card');
-    if (dropdownBtn && cardEl) {
-        dropdownBtn.addEventListener('show.bs.dropdown', () => {
-            col.classList.add('dropdown-open');
-            cardEl.classList.add('dropdown-open');
-            cardEl.style.zIndex = '1050';
-            col.style.zIndex = '1050';
-        });
-        dropdownBtn.addEventListener('hidden.bs.dropdown', () => {
-            col.classList.remove('dropdown-open');
-            cardEl.classList.remove('dropdown-open');
-            cardEl.style.zIndex = '';
-            col.style.zIndex = '';
-        });
-    }
-
-    // Return the created column element
     return col;
 }
 
@@ -2236,10 +2209,93 @@ document.getElementById('unassigned-drawer')?.addEventListener('click', (e) => {
     }
 });
 
-// Event delegation for items grid empty state "Add Item" button
-document.getElementById('items-container-grid')?.addEventListener('click', (e) => {
-    const modalBtn = e.target.closest('[data-action="open-item-modal"]');
-    if (modalBtn && window.DialogManager) {
-        DialogManager.open('item-modal');
-    }
-});
+// Event delegation for items container grid (card actions, empty state, dropdown z-index)
+const itemsGrid = document.getElementById('items-container-grid');
+if (itemsGrid) {
+    itemsGrid.addEventListener('click', (e) => {
+        const modalBtn = e.target.closest('[data-action="open-item-modal"]');
+        if (modalBtn && window.DialogManager) {
+            DialogManager.open('item-modal');
+            return;
+        }
+
+        const actionTarget = e.target.closest('[data-action]');
+        if (!actionTarget) return;
+
+        const action = actionTarget.dataset.action;
+        const col = actionTarget.closest('.item-col');
+        const itemId = actionTarget.dataset.itemId || col?.dataset.id;
+        if (!itemId) return;
+
+        let item = (fetchedItems || []).find(i => String(i.id) === String(itemId));
+        if (!item && col) {
+            item = {
+                id: itemId,
+                name: col.dataset.name,
+                quantity: parseInt(col.dataset.quantity, 10) || 0,
+                min_quantity: parseInt(col.dataset.minQuantity, 10) || 3,
+                ip: col.dataset.ip,
+                position: col.dataset.position,
+                tags: col.dataset.tags
+            };
+        }
+        if (!item) return;
+
+        switch (action) {
+            case 'minus':
+                e.preventDefault();
+                handleQuantityChange(item, -1);
+                break;
+            case 'plus':
+                e.preventDefault();
+                handleQuantityChange(item, 1);
+                break;
+            case 'locate':
+                e.preventDefault();
+                locateItem(item);
+                break;
+            case 'locate-img':
+                if (e.target.closest('.stock-badge') || e.target.closest('.location-badge')) return;
+                locateItem(item);
+                break;
+            case 'edit':
+                e.preventDefault();
+                openEditModal(item);
+                break;
+            case 'copy':
+                e.preventDefault();
+                openCopyModal(item);
+                break;
+            case 'delete':
+                e.preventDefault();
+                deleteItemCard(item, col, actionTarget);
+                break;
+            case 'crop':
+                e.preventDefault();
+                openCropModal(item);
+                break;
+        }
+    });
+
+    itemsGrid.addEventListener('show.bs.dropdown', (e) => {
+        const col = e.target.closest('.item-col');
+        const cardEl = col?.querySelector('.card');
+        if (col && cardEl) {
+            col.classList.add('dropdown-open');
+            cardEl.classList.add('dropdown-open');
+            cardEl.style.zIndex = '1050';
+            col.style.zIndex = '1050';
+        }
+    });
+
+    itemsGrid.addEventListener('hidden.bs.dropdown', (e) => {
+        const col = e.target.closest('.item-col');
+        const cardEl = col?.querySelector('.card');
+        if (col && cardEl) {
+            col.classList.remove('dropdown-open');
+            cardEl.classList.remove('dropdown-open');
+            cardEl.style.zIndex = '';
+            col.style.zIndex = '';
+        }
+    });
+}

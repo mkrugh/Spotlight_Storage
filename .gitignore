@@ -198,6 +198,9 @@ $RECYCLE.BIN/
 # DB files
 *.db
 *.sqlite
+*.db-wal
+*.db-shm
+data/
 *.jpg
 *.webp
 

@@ -77,9 +77,11 @@ function loadTranslation(lang) {
             }
 
             // Bootstrap tooltips re-initialization
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-                new bootstrap.Tooltip(tooltipTriggerEl);
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (tooltipTriggerEl) {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    bootstrap.Tooltip.getInstance(tooltipTriggerEl)?.dispose();
+                    new bootstrap.Tooltip(tooltipTriggerEl);
+                }
             });
 
             // Settings Page

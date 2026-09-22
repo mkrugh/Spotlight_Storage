@@ -11,6 +11,31 @@ class TestApiBuilds:
         assert response.status_code == 200
         assert response.get_json() == []
 
+    def test_get_builds_include_parts_query_param(self, client):
+        item_res = client.post('/api/items', json={'name': 'LED', 'quantity': 20})
+        item_id = item_res.get_json()['id']
+        build_res = client.post('/api/builds', json={
+            'name': 'LED Strip Controller',
+            'items': [{'item_id': item_id, 'quantity_needed': 5}]
+        })
+        build_id = build_res.get_json()['id']
+
+        # Normal request (backward compatible)
+        res_normal = client.get('/api/builds')
+        assert res_normal.status_code == 200
+        normal_data = res_normal.get_json()
+        target_normal = next(b for b in normal_data if b['id'] == build_id)
+        assert 'items' not in target_normal
+
+        # Request with include_parts=true
+        res_parts = client.get('/api/builds?include_parts=true')
+        assert res_parts.status_code == 200
+        parts_data = res_parts.get_json()
+        target_with_parts = next(b for b in parts_data if b['id'] == build_id)
+        assert 'items' in target_with_parts
+        assert len(target_with_parts['items']) == 1
+        assert target_with_parts['items'][0]['item_id'] == item_id
+
     def test_create_build(self, client):
         response = client.post('/api/builds', json={'name': 'Drone Build'})
         assert response.status_code == 201

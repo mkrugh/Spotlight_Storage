@@ -1765,3 +1765,19 @@ dialog.legacy-dialog-polyfill {
     background-color: var(--bs-primary-bg-subtle, #e7f1ff);
 }
 
+/* Fallback toast container for browsers without Popover API support */
+.dialog-toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1060;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.dialog-toast-container > * {
+    pointer-events: auto;
+}
+

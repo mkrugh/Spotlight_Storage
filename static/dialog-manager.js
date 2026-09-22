@@ -130,6 +130,18 @@ window.DialogManager = (function() {
             document.body.style.removeProperty('padding-right');
         }
 
+        // Clean up or migrate any dialog-injected toasts
+        const dialogToasts = dialogEl.querySelector('.dialog-toast-container');
+        if (dialogToasts) {
+            const mainContainer = document.getElementById('app-toast-container');
+            if (mainContainer) {
+                while (dialogToasts.firstChild) {
+                    mainContainer.appendChild(dialogToasts.firstChild);
+                }
+            }
+            dialogToasts.remove();
+        }
+
         // Clean up any rogue Bootstrap backdrops that may have been injected
         document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
 

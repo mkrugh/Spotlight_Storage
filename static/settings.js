@@ -6,24 +6,48 @@ var language = "en";
 var lightMode = "light";
 
 
+function debounce(fn, delay = 300) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
+const debouncedAddSettings = debounce(addSettings, 300);
+
+function updateBrightnessDisplayOnly() {
+    const brightnessSlider = document.getElementById("settings_brightness");
+    if (brightnessSlider) {
+        const display = document.getElementById('brightness-display');
+        if (display) display.textContent = brightnessSlider.value + "%";
+    }
+}
+
+function updateTimeoutDisplayOnly() {
+    const timeoutSlider = document.getElementById("settings_timeout");
+    if (timeoutSlider) {
+        const display = document.getElementById('timeout-display');
+        if (display) {
+            if (timeoutSlider.value < 1) {
+                display.textContent = "Toggle";
+            } else {
+                const minutes = Math.floor(timeoutSlider.value / 60);
+                const seconds = timeoutSlider.value % 60;
+                display.textContent = minutes + "m " + seconds + "s";
+            }
+        }
+    }
+}
+
 // Function to update brightness output
 function updateBrightnessOutput() {
-    const brightnessSlider = document.getElementById("settings_brightness");
-    document.getElementById('brightness-display').textContent = brightnessSlider.value + "%";
-    addSettings(event);
+    updateBrightnessDisplayOnly();
+    debouncedAddSettings();
 }
 
 function updateTimeoutOutput() {
-    const timeoutSlider = document.getElementById("settings_timeout");
-    if (timeoutSlider.value < 1) {
-        document.getElementById('timeout-display').textContent = "Toggle";
-    } else {
-        const minutes = Math.floor(timeoutSlider.value / 60);
-        const seconds = timeoutSlider.value % 60;
-
-        document.getElementById('timeout-display').textContent = minutes + "m " + seconds + "s";
-    }
-    addSettings(event);
+    updateTimeoutDisplayOnly();
+    debouncedAddSettings();
 }
 
 function setStandbyCardVisualState(enabled) {
@@ -570,34 +594,43 @@ document.getElementById("party-button").addEventListener('click', () => {
     sendLedRequest('party')
 });
 
-brightnessRange.addEventListener('input', function () {
-    document.getElementById('brightness-display').textContent = this.value + "%";
-});
-brightnessRange.addEventListener('change', function () {
-    updateBrightnessOutput();
-});
+if (brightnessRange) {
+    brightnessRange.addEventListener('input', function () {
+        const display = document.getElementById('brightness-display');
+        if (display) display.textContent = this.value + "%";
+        debouncedAddSettings();
+    });
+    brightnessRange.addEventListener('change', function () {
+        updateBrightnessOutput();
+    });
+}
 
+if (timeoutRange) {
+    timeoutRange.addEventListener('input', function () {
+        const display = document.getElementById('timeout-display');
+        if (display) {
+            if (this.value < 1) {
+                display.textContent = "Off";
+            } else {
+                const minutes = Math.floor(this.value / 60);
+                const seconds = this.value % 60;
+                display.textContent = minutes + "m " + seconds + "s";
+            }
+        }
+        debouncedAddSettings();
+    });
+    timeoutRange.addEventListener('change', function () {
+        updateTimeoutOutput();
+    });
+}
 
-timeoutRange.addEventListener('input', function () {
-    if (this.value < 1) {
-        document.getElementById('timeout-display').textContent = "Off";
-    } else {
-        var minutes = Math.floor(this.value / 60);
-        var seconds = this.value % 60;
-
-        var timeString = minutes + "m " + seconds + "s";
-        document.getElementById('timeout-display').textContent = timeString;
-    }
-});
-timeoutRange.addEventListener('change', function () {
-    updateTimeoutOutput();
-});
-
-myOffcanvas.addEventListener('show.bs.offcanvas', function () {
-    updateBrightnessOutput();
-    updateTimeoutOutput();
-    populateEspTable();
-})
+if (myOffcanvas) {
+    myOffcanvas.addEventListener('show.bs.offcanvas', function () {
+        updateBrightnessDisplayOnly();
+        updateTimeoutDisplayOnly();
+        populateEspTable();
+    });
+}
 
 let currentnventurItemIndex = 0; // Keep track of the current item index
 

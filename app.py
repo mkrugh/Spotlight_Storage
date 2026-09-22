@@ -1,4 +1,5 @@
 # Importing necessary modules and packages
+from concurrent.futures import ThreadPoolExecutor
 import ipaddress
 import json
 import os
@@ -905,7 +906,8 @@ def turn_led_on():
     app.previous_positions = {}  # Reset previous positions
     if request.method == 'GET':
         ips = get_unique_ips_from_database()
-        for ip in ips:
+
+        def process_ip_on(ip):
             total_leds = get_total_leds(ip)
             on_data = {
                 "on": True,
@@ -959,6 +961,10 @@ def turn_led_on():
                 ]
             }
             send_request(ip, on_data)
+
+        if ips:
+            with ThreadPoolExecutor(max_workers=min(10, len(ips))) as executor:
+                list(executor.map(process_ip_on, ips))
         return jsonify({'success': True})
 
 
@@ -968,9 +974,10 @@ def turn_led_off():
     ips = get_unique_ips_from_database()
     cancel_off_timer()
     app.previous_positions = {}  # Reset previous positions
-    for ip in ips:
+
+    def process_ip_off(ip):
         total_leds = get_total_leds(ip)
-        on_data = {
+        off_data = {
             "on": False,
             "transition": 5,
             "seg": [
@@ -996,7 +1003,11 @@ def turn_led_off():
                 {"stop": 0}
             ]
         }
-        send_request(ip, on_data)
+        send_request(ip, off_data)
+
+    if ips:
+        with ThreadPoolExecutor(max_workers=min(10, len(ips))) as executor:
+            list(executor.map(process_ip_off, ips))
     return jsonify({'success': True})
 
 
@@ -1008,34 +1019,40 @@ def turn_led_party():
     set_global_settings()
     if request.method == 'GET':
         ips = get_unique_ips_from_database()
-        for ip in ips:
-            party_data = {"on": True, "bri": round(255 * app.brightness), "transition": 5, "mainseg": 0, "seg": [
-                {"id": 0, "grp": 1, "spc": 0, "of": 0, "on": True, "frz": False, "bri": 255, "cct": 127, "set": 0,
-                 "col": [[255, 255, 255], [0, 0, 0], [0, 0, 0]], "fx": 9, "sx": 128, "ix": 128, "pal": 0, "c1": 128,
-                 "c2": 128, "c3": 16},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0},
-                {"stop": 0}]}
+        party_data = {"on": True, "bri": round(255 * app.brightness), "transition": 5, "mainseg": 0, "seg": [
+            {"id": 0, "grp": 1, "spc": 0, "of": 0, "on": True, "frz": False, "bri": 255, "cct": 127, "set": 0,
+             "col": [[255, 255, 255], [0, 0, 0], [0, 0, 0]], "fx": 9, "sx": 128, "ix": 128, "pal": 0, "c1": 128,
+             "c2": 128, "c3": 16},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0},
+            {"stop": 0}]}
+
+        def process_ip_party(ip):
             send_request(ip, party_data)
-        return jsonify()
+
+        if ips:
+            with ThreadPoolExecutor(max_workers=min(10, len(ips))) as executor:
+                list(executor.map(process_ip_party, ips))
+        return jsonify({'success': True})
 
 
 @app.route('/api/builds', methods=['GET', 'POST'])
 def builds():
     if request.method == 'GET':
-        return jsonify(db.read_builds()), 200
+        include_parts = request.args.get('include_parts', '').lower() in ('true', '1')
+        return jsonify(db.read_builds(include_parts=include_parts)), 200
     elif request.method == 'POST':
         data = request.get_json()
         if not data or not data.get('name'):

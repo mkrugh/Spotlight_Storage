@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 import sqlite3
-from collections import Counter
+from collections import Counter, defaultdict
 
 # Define the path for the combined database
 COMBINED_DATABASE = os.getenv('COMBINED_DATABASE', 'data/combined_data.db')
@@ -475,10 +475,28 @@ def get_all_tags():
         return unique_tags_with_count
 
 
-def read_builds():
+def read_builds(include_parts=False):
     with contextlib.closing(get_db_connection()) as conn:
         builds = conn.execute('SELECT * FROM builds').fetchall()
-        return [dict(b) for b in builds]
+        result = [dict(b) for b in builds]
+        if include_parts and result:
+            rows = conn.execute(
+                '''SELECT bi.id, bi.build_id, bi.item_id, bi.quantity_needed,
+                          i.name, i.quantity, i.image
+                   FROM build_items bi
+                   JOIN items i ON bi.item_id = i.id'''
+            ).fetchall()
+            items_by_build = defaultdict(list)
+            for r in rows:
+                d = dict(r)
+                build_id = d.pop('build_id')
+                items_by_build[build_id].append(d)
+            for b in result:
+                b['items'] = items_by_build.get(b['id'], [])
+        elif include_parts:
+            for b in result:
+                b['items'] = []
+        return result
 
 
 def write_build(name):

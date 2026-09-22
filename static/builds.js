@@ -7,24 +7,8 @@ const buildExecuteModal = { show: () => DialogManager.open('build-execute-modal'
 
 async function openBuildsModal() {
     try {
-        const r = await fetch('/api/builds');
-        const builds = await r.json();
-        // Fetch detailed item info for each build to compute live stock readiness
-        const detailedBuilds = await Promise.all(builds.map(async b => {
-            try {
-                const detRes = await fetch(`/api/builds/${b.id}`);
-                if (detRes.ok) {
-                    const data = await detRes.json();
-                    b.items = data.items || [];
-                } else {
-                    b.items = [];
-                }
-            } catch (e) {
-                b.items = [];
-            }
-            return b;
-        }));
-        renderBuildsList(detailedBuilds);
+        const builds = await apiFetch('/api/builds?include_parts=true');
+        renderBuildsList(builds || []);
         buildsListModal.show();
     } catch (err) {
         console.error('Error opening builds modal:', err);

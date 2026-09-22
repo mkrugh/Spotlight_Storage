@@ -808,10 +808,10 @@ function hideHoverIndicators(mode) {
     if (tooltip) tooltip.classList.add('d-none');
 }
 
-function getCellAtPointer(event, mode) {
+function getCellAtPointer(event, mode, cachedRect = null) {
     const canvas = document.getElementById(mode + '-responsive-canvas');
     if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
+    const rect = cachedRect || canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
     const scaleX = canvas.width / rect.width;
@@ -931,8 +931,19 @@ function setupCanvasHoverTracking(mode) {
     if (canvas.dataset.hoverInitialized === 'true') return;
     canvas.dataset.hoverInitialized = 'true';
 
-    canvas.addEventListener('pointermove', function (e) {
-        const cell = getCellAtPointer(e, mode);
+    let cachedRect = null;
+    let rafPending = false;
+    let lastPointerEvent = null;
+
+    canvas.addEventListener('pointerenter', () => {
+        cachedRect = canvas.getBoundingClientRect();
+    });
+
+    function handleHover(e) {
+        if (!cachedRect) {
+            cachedRect = canvas.getBoundingClientRect();
+        }
+        const cell = getCellAtPointer(e, mode, cachedRect);
         if (!cell) {
             highlight.classList.add('d-none');
             tooltip.classList.add('d-none');
@@ -988,9 +999,23 @@ function setupCanvasHoverTracking(mode) {
             tooltip.style.transform = 'translate(-50%, -100%)';
         }
         tooltip.classList.remove('d-none');
+    }
+
+    canvas.addEventListener('pointermove', function (e) {
+        lastPointerEvent = e;
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+            if (lastPointerEvent) {
+                handleHover(lastPointerEvent);
+            }
+            rafPending = false;
+        });
     });
 
     canvas.addEventListener('pointerleave', function () {
+        lastPointerEvent = null;
+        cachedRect = null;
         hideHoverIndicators(mode);
     });
 }
