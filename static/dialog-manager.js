@@ -76,6 +76,10 @@ window.DialogManager = (function() {
         document.body.classList.add('dialog-open');
 
         if (!dialogEl._dialogManagerInitialized) {
+            dialogEl.addEventListener('cancel', (e) => {
+                e.preventDefault();
+                closeDialog(id);
+            });
             dialogEl.addEventListener('click', (e) => {
                 const dismissBtn = e.target.closest('[data-dialog-dismiss], [data-bs-dismiss="modal"]');
                 if (dismissBtn) {
@@ -156,5 +160,12 @@ window.DialogManager = (function() {
         }
     }, true);
 
-    return { open: openDialog, close: closeDialog };
+    const getActiveDialog = () => {
+        if (openDialogIds.size === 0) return null;
+        const lastId = Array.from(openDialogIds).pop();
+        return document.getElementById(lastId);
+    };
+
+    return { open: openDialog, close: closeDialog, getActiveDialog };
 })();
+

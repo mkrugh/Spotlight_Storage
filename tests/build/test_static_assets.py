@@ -41,7 +41,7 @@ class TestStaticAssets:
     def test_all_static_javascript_files_non_empty(self):
         """Verify all core JavaScript files in static/ exist and have valid content."""
         expected_scripts = [
-            'images.js', 'dialog-manager.js', 'script.js', 'esp.js', 'tags.js',
+            'api.js', 'images.js', 'dialog-manager.js', 'script.js', 'esp.js', 'tags.js',
             'settings.js', 'gen_grid.js', 'color-modes.js',
             'builds.js', 'map.js', 'translation.js'
         ]

@@ -1,3 +1,8 @@
+// Global ESP state
+let ESPs = [];
+let filterESP = [];
+let pendingOverrideState = null;
+
 // Function to populate the ESP table with data fetched from the server
 function populateEspTable() {
     const espTable = document.getElementById("esp_table");
@@ -6,8 +11,7 @@ function populateEspTable() {
     espTable.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
 
     // Fetch and populate the ESP data into the table
-    fetch("/api/esp")
-        .then((response) => response.json())
+    apiFetch("/api/esp")
         .then((data) => {
             const tableBody = document.createElement("tbody");
             ESPs = data;
@@ -385,10 +389,8 @@ document.getElementById("save-esp-button").addEventListener('click', async () =>
             },
             body: JSON.stringify(espItem),
         }).then((response) => response.json()).then(() => {
-            setTimeout(() => {
-                populateEspTable();
-                if (typeof loadItems === 'function') loadItems();
-            }, 500);
+            populateEspTable();
+            if (typeof loadItems === 'function') loadItems();
             DialogManager.close('esp-modal');
         }).catch((error) => console.error(error));
     };
@@ -494,47 +496,18 @@ document.getElementById("save-esp-button").addEventListener('click', async () =>
 
     if (existingESP && (espId == null || espId === '')) {
         espId = existingESP.id;
-        // Hide the esp-modal
-        const espModal = { show: () => DialogManager.open('esp-modal'), hide: () => DialogManager.close('esp-modal') };
-        espModal.hide();
+        DialogManager.close('esp-modal');
 
-        // Show confirmation modal
-        const confirmationModal = { show: () => DialogManager.open('esp-override-modal'), hide: () => DialogManager.close('esp-override-modal') };
+        pendingOverrideState = {
+            existingEsp: existingESP,
+            espItem: espItem,
+            processESPItem: processESPItem,
+            checkResizeConflicts: checkResizeConflicts
+        };
+
         document.getElementById('deviceNameSpan').textContent = existingESP.name;
         document.getElementById('ipAddressSpan').textContent = existingESP.esp_ip;
-        confirmationModal.show();
-
-        document.getElementById('confirmOverride').addEventListener('click', async () => {
-            const safe = await checkResizeConflicts(existingESP.id);
-            if (safe) {
-                processESPItem();
-            }
-            confirmationModal.hide();
-        }, { once: true });
-
-        // Restore the esp-modal and user inputs if the user cancels the action
-        document.querySelector('#esp-override-modal .btn-secondary').addEventListener('click', () => {
-            espModal.show();
-            document.getElementById("esp_name").value = espItem.name;
-            document.getElementById("esp_ip").value = espItem.esp_ip;
-            if (espItem.sections && espItem.sections.length > 0) {
-                document.getElementById('esp_grid_type_multi').checked = true;
-                document.getElementById('esp-single-grid-container').classList.add('d-none');
-                document.getElementById('esp-multi-grid-container').classList.remove('d-none');
-                currentEspSections = [...espItem.sections];
-                renderEspSectionRows();
-            } else {
-                document.getElementById('esp_grid_type_single').checked = true;
-                document.getElementById('esp-single-grid-container').classList.remove('d-none');
-                document.getElementById('esp-multi-grid-container').classList.add('d-none');
-                document.getElementById("esp_rows").value = espItem.rows;
-                document.getElementById("esp_columns").value = espItem.cols;
-                document.getElementById("esp_starty").value = espItem.startTop;
-                document.getElementById("esp_startx").value = espItem.startLeft;
-                document.getElementById("esp_serpentine").value = espItem.serpentineDirection;
-            }
-            espId = "";
-        }, { once: true });
+        DialogManager.open('esp-override-modal');
     } else {
         const safe = await checkResizeConflicts(espId);
         if (!safe) return;
@@ -636,14 +609,50 @@ document.getElementById('confirmDelete').addEventListener('click', function () {
     }).then(response => {
         if (response.ok) {
             console.log("Item deleted successfully");
-            setTimeout(function () {
-                populateEspTable();
-            }, 500);
-            const delete_esp_modal = document.querySelector('#esp-delete-modal');
+            populateEspTable();
+            if (typeof loadItems === 'function') loadItems();
             DialogManager.close('esp-delete-modal');
         }
     }).catch(error => console.error(error));
 });
+
+// Static event listeners for ESP override confirmation modal (prevents listener accumulation)
+document.getElementById('confirmOverride')?.addEventListener('click', async () => {
+    if (!pendingOverrideState) return;
+    const { existingEsp, checkResizeConflicts, processESPItem } = pendingOverrideState;
+    const safe = await checkResizeConflicts(existingEsp.id);
+    if (safe) {
+        processESPItem();
+    }
+    DialogManager.close('esp-override-modal');
+    pendingOverrideState = null;
+});
+
+document.querySelector('#esp-override-modal .btn-secondary')?.addEventListener('click', () => {
+    if (!pendingOverrideState) return;
+    const { espItem } = pendingOverrideState;
+    DialogManager.open('esp-modal');
+    document.getElementById("esp_name").value = espItem.name;
+    document.getElementById("esp_ip").value = espItem.esp_ip;
+    if (espItem.sections && espItem.sections.length > 0) {
+        document.getElementById('esp_grid_type_multi').checked = true;
+        document.getElementById('esp-single-grid-container').classList.add('d-none');
+        document.getElementById('esp-multi-grid-container').classList.remove('d-none');
+        currentEspSections = [...espItem.sections];
+        renderEspSectionRows();
+    } else {
+        document.getElementById('esp_grid_type_single').checked = true;
+        document.getElementById('esp-single-grid-container').classList.remove('d-none');
+        document.getElementById('esp-multi-grid-container').classList.add('d-none');
+        document.getElementById("esp_rows").value = espItem.rows;
+        document.getElementById("esp_columns").value = espItem.cols;
+        document.getElementById("esp_starty").value = espItem.startTop;
+        document.getElementById("esp_startx").value = espItem.startLeft;
+        document.getElementById("esp_serpentine").value = espItem.serpentineDirection;
+    }
+    pendingOverrideState = null;
+});
+
 
 
 document.getElementById('esp_rows').addEventListener('change', function () {
@@ -698,8 +707,6 @@ document.getElementById('esp-modal').addEventListener('hidden.bs.modal', functio
 
 
 const espTabs = document.getElementById('espTabs');
-let ESPs = [];
-let filterESP = [];
 
 // Fetch ESP data from the server and populate the tabs
 

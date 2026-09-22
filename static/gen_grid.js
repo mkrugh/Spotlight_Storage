@@ -692,14 +692,28 @@ function redrawGrid(rows, columns, mode, startX, startY, serpentineDirection) {
 
 
 function TestLights() {
+    const selectEspDropdown = document.getElementById('item_esp_select');
+    if (!selectEspDropdown || selectEspDropdown.selectedIndex < 0) {
+        if (typeof showToast === 'function') {
+            showToast('Please select a storage controller first.', 'warning');
+        } else {
+            alert('Please select a storage controller first.');
+        }
+        return;
+    }
     const selectedEspIndex = selectEspDropdown.selectedIndex;
     const selectedEsp = selectEspDropdown.options[selectedEspIndex];
-    if (selectedEsp.disabled) {
+    if (!selectedEsp || selectedEsp.disabled) {
         // Nothing is selected or "Please add an ESP device first..." is selected, so we can't proceed
-        alert("Please select an ESP to Test.");
+        if (typeof showToast === 'function') {
+            showToast('Please select a storage controller first.', 'warning');
+        } else {
+            alert('Please select a storage controller first.');
+        }
         return;
     }
     const ip = selectedEsp.dataset.espIp;
+    if (!ip) return;
     const data = {};
     data[ip] = clickedCells;
     fetch('/test_lights', {
@@ -709,10 +723,12 @@ function TestLights() {
         },
         body: JSON.stringify(data),
     })
-        .then(response => response.json())
-        .then()
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .catch((error) => {
-            console.error('Error:', error);
+            console.error('Error testing lights:', error);
         });
 }
 

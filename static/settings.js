@@ -84,25 +84,20 @@ function addSettings(event) {
         language = "en"
     }
     const settings = {brightness, timeout, lightMode, colors, language};
-    // Save the settings in the database using fetch
-    fetch("/api/settings", {
+    // Save the settings in the database using apiFetch
+    apiFetch("/api/settings", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(settings),
     })
-        .then((response) => response.json())
-        .catch((error) => console.error(error));
+        .catch((error) => console.error("Error saving settings:", error));
 }
 
 
 
 function loadSettings() {
     // Fetch the settings from the server
-    fetch("/api/settings", {
-        method: "GET",
-        headers: {"Content-Type": "application/json"},
-    })
-        .then((response) => response.json())
+    apiFetch("/api/settings")
         .then((settings) => {
             // Update input fields with the retrieved settings
             document.getElementById("settings_brightness").value = settings.brightness;
@@ -121,7 +116,13 @@ function loadSettings() {
             }
 
             // Ensure colors is an array and update the color inputs
-            const colors = Array.isArray(settings.colors) ? settings.colors : JSON.parse(settings.colors);
+            let colors;
+            try {
+                colors = Array.isArray(settings.colors) ? settings.colors : JSON.parse(settings.colors);
+                if (!Array.isArray(colors)) colors = ['#f0f0f0', '#00ff00'];
+            } catch (e) {
+                colors = ['#f0f0f0', '#00ff00'];
+            }
             const standbyColor = colors[0] || '#f0f0f0';
             const locateColor = colors[1] || '#00ff00';
 
@@ -748,10 +749,6 @@ document.getElementById("inventur").addEventListener("click", function () {
         };
     }
 
-    document.getElementById('save-inventur-button')?.addEventListener('click', function () {
-        savePendingInput();
-    });
-
     edit_btn.onclick = function () {
         if (!itemsData || itemsData.length === 0) return;
         savePendingInput();
@@ -906,6 +903,13 @@ async function checkVendorUpdates() {
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     populateEspTable();
+
+    // Wire up inventur save button once
+    document.getElementById('save-inventur-button')?.addEventListener('click', function () {
+        if (typeof savePendingInput === 'function') {
+            savePendingInput();
+        }
+    });
 
     // Wire up vendor update check button
     const vendorBtn = document.getElementById('check-vendor-updates-btn');

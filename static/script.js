@@ -1,6 +1,7 @@
 const selectEspDropdown = document.getElementById("item_esp_select");
 let fetchedItems = []; // Define an array to store fetched items
 let fetchedEsps = []; // Store fetched ESP devices
+let editingItemName = null;
 
 function escapeHtml(str) {
     return String(str ?? '')
