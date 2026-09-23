@@ -3,7 +3,7 @@
 ## Overview
 This document provides an architectural walkthrough and verification report for the automated test suite, security hardening, multi-threaded concurrency safeguards, and production container modernization implemented for **Spotlight Storage**.
 
-The complete test suite contains **148 automated tests across 20 test modules**.
+The complete test suite contains **169 automated tests across 25 test modules**.
 
 ---
 
@@ -39,7 +39,12 @@ tests/
 │   ├── test_api_endpoints_misc.py    # /test_lights, /api/translations, /favicon.ico, /, links (5 tests)
 │   ├── test_concurrency.py           # Thread-safe state_lock & concurrent transactions (3 tests)
 │   ├── test_performance.py           # Bulk inventory and tag scale benchmarks (2 tests)
+│   ├── test_db_refactor.py           # Database transaction integrity and connection handling (4 tests)
 │   └── test_wled_controller.py       # WLED JSON API interaction & timeouts (4 tests)
+│
+├── ui/
+│   ├── conftest.py                   # Playwright browser context & server fixtures
+│   └── test_builds_modal_interactions.py # Builds modal lifecycle, part picker, search, unsaved guard (17 tests)
 │
 └── build/
     ├── __init__.py
@@ -55,7 +60,7 @@ tests/
 | Category | Modules | Test Count | Key Coverage |
 | :--- | :--- | :--- | :--- |
 | **Unit Logic** | `test_matrix_math.py`, `test_color_conversion.py`, `test_validation.py` | 25 | LED serpentine math, matrix corner offsets, multi-section sequential routing, hex colors, IP/URL & port validation |
-| **Database Operations** | `test_db_items.py`, `test_db_esp.py`, `test_db_builds.py`, `test_db_settings.py` | 24 | CRUD operations, tag aggregations, BOM recipe stock deductions, cascade deletes |
+| **Database Operations** | `test_db_items.py`, `test_db_esp.py`, `test_db_builds.py`, `test_db_settings.py`, `test_db_refactor.py` | 28 | CRUD operations, tag aggregations, BOM recipe stock deductions, cascade deletes, transaction atomicity |
 | **Internationalization (i18n)** | `test_i18n_keys.py` | 3 | JSON parsing validity & 100% key parity across all 6 translations (`de`, `en`, `fi`, `fr`, `nl`, `pl`) |
 | **REST APIs & Hardware** | `test_api_items.py`, `test_api_esp.py`, `test_api_esp_test.py`, `test_api_builds.py`, `test_api_settings.py`, `test_api_tags.py`, `test_api_endpoints_misc.py`, `test_wled_controller.py` | 51 | REST endpoints, multi-section ESP configurations, WLED verification, pulse sequence, UI links, `/favicon.ico` |
 | **Image & File Handling** | `test_image_handling.py` | 8 | File extension allowlisting, upstream proxying, 5MB memory buffer cap |
@@ -63,7 +68,8 @@ tests/
 | **Concurrency & Thread-Safety** | `test_concurrency.py` | 3 | Multi-threaded `app.state_lock`, simultaneous timer updates, SQLite concurrent transactions |
 | **Performance & Scaling** | `test_performance.py` | 2 | 300-item bulk inventory queries (< 50ms) and tag aggregations under scale |
 | **Build & Static Assets** | `test_requirements.py`, `test_static_assets.py` | 8 | Dockerfile non-root user, healthcheck, dependency import sanity, HTML static link verification |
-| **Total** | **20 Modules** | **148 Tests** | **100% Passing (0 Warnings)** |
+| **UI & End-to-End (Playwright)** | `test_builds_modal_interactions.py` | 17 | Builds modal open/close lifecycle, search picker, tokenized tags, unsaved change warning guard |
+| **Total** | **25 Modules** | **169 Tests** | **100% Passing (0 Warnings)** |
 
 ---
 
@@ -151,8 +157,8 @@ pytest tests/build/ -v
 ## Verification Results
 
 ```text
-============================= 148 passed in 4.29s ==============================
+============================= 169 passed in 10.53s =============================
 ```
-- **148 passed, 0 failed.**
+- **169 passed, 0 failed.**
 - **0 deprecation warnings.**
 - **0 pytest warnings.**

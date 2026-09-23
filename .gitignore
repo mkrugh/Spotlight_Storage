@@ -203,6 +203,7 @@ $RECYCLE.BIN/
 data/
 *.jpg
 *.webp
+!scripts/demo_assets/*
 
 # Active Run directory
 Active_Run/
