@@ -53,6 +53,15 @@ let isEditingItem = false;
 let isCopyingItem = false;
 let editingItemId = null; // Track the ID of the item being edited
 let editingItemIP = null; // Track the IP of the item being edited
+let isItemFormDirty = false;
+
+function markItemFormDirty() {
+    isItemFormDirty = true;
+}
+
+function resetItemFormDirty() {
+    isItemFormDirty = false;
+}
 
 function hasPopoverSupport() {
     return typeof HTMLElement.prototype.togglePopover === 'function' &&
@@ -333,7 +342,8 @@ async function addItem(event) {
         isEditingItem = false;
         isCopyingItem = false;
         removeLocalStorage();
-        resetModal();
+        resetItemFormDirty();
+        DialogManager.close('item-modal');
         if (typeof updatePlacementHealthUI === 'function') {
             updatePlacementHealthUI();
         }
@@ -1015,22 +1025,58 @@ document.getElementById('item-modal').addEventListener('show.bs.modal', function
     );
 
     if (isExplicitAdd || (!isEditingItem && !isCopyingItem)) {
-        resetModal(true);
+        clearItemFormFields();
+        resetItemFormDirty();
+    }
+});
+
+document.getElementById('item-modal').addEventListener('hide.bs.modal', function (e) {
+    if (isItemFormDirty) {
+        e.preventDefault();
+        showConfirmModal({
+            title: (typeof translation !== 'undefined' && translation.confirm) ? translation.confirm : 'Discard Unsaved Changes?',
+            message: (typeof translation !== 'undefined' && translation.unsaved_changes_msg) ? translation.unsaved_changes_msg : 'You have unsaved changes. Discard them and exit?',
+            confirmText: (typeof translation !== 'undefined' && translation.discard) ? translation.discard : 'Discard & Exit',
+            confirmBtnClass: 'btn-danger'
+        }).then(confirmed => {
+            if (confirmed) {
+                resetItemFormDirty();
+                DialogManager.close('item-modal');
+            }
+        });
     }
 });
 
 document.getElementById('item-modal').addEventListener('hidden.bs.modal', function () {
-    resetModal(true);
+    clearItemFormFields();
+    resetItemFormDirty();
     if (typeof hideHoverIndicators === 'function') {
         hideHoverIndicators('item');
     }
 });
+
+const itemModalElement = document.getElementById('item-modal');
+if (itemModalElement) {
+    itemModalElement.addEventListener('input', (e) => {
+        if (e.target && (e.target.matches('input') || e.target.matches('select') || e.target.matches('textarea'))) {
+            markItemFormDirty();
+        }
+    });
+    itemModalElement.addEventListener('change', (e) => {
+        if (e.target && (e.target.matches('input') || e.target.matches('select') || e.target.matches('textarea'))) {
+            markItemFormDirty();
+        }
+    });
+}
 
 document.getElementById('item-modal').addEventListener('shown.bs.modal', function () {
     let inputField = document.getElementById('item_name');
     inputField.focus();
     inputField.select();
     populateEspDropdown();
+    if (!isEditingItem && !isCopyingItem) {
+        resetItemFormDirty();
+    }
 });
 document.getElementById('item_esp_select').addEventListener('change', function () {
     let selectEspDropdown = document.getElementById('item_esp_select');
@@ -1046,7 +1092,6 @@ document.getElementById('item_esp_select').addEventListener('change', function (
 });
 
 document.getElementById("save-item-button").addEventListener("click", addItem);
-document.getElementById("cropAndSaveBtn").addEventListener("click", addItem);
 function renderLoadingSkeletons(count = 8) {
     const itemsContainer = document.getElementById('items-container-grid');
     if (!itemsContainer) return;
@@ -1277,6 +1322,7 @@ function openEditModal(item) {
         loadTagsIntoTagify(itemTagsArray);
     }
 
+    resetItemFormDirty();
     DialogManager.open('item-modal');
 }
 
@@ -1324,6 +1370,7 @@ function openCopyModal(item) {
     if (typeof loadTagsIntoTagify === 'function') {
         loadTagsIntoTagify(itemTagsArray);
     }
+    resetItemFormDirty();
     DialogManager.open('item-modal');
 }
 
@@ -1336,7 +1383,7 @@ function openCropModal(item) {
     // Set the dataset attributes
     cropImageModal.dataset.item = JSON.stringify(item);
 
-    if (isValidUrl(image)) {
+    if (typeof isExternalUrl === 'function' ? isExternalUrl(image) : isValidUrl(image)) {
         // Fetch the image from the backend instead of setting the URL directly
         fetchWithTimeout(`/proxy-image?url=${encodeURIComponent(image)}`)
             .then(response => {
@@ -1663,7 +1710,7 @@ function initialiseTooltips() {
     });
 }
 
-function resetModal(skipHide = false) {
+function clearItemFormFields() {
     isEditingItem = false;
     isCopyingItem = false;
     editingItemId = null;
@@ -1688,7 +1735,14 @@ function resetModal(skipHide = false) {
     const tagsInput = document.getElementById("item_tags");
     if (tagsInput) tagsInput.value = "";
     if (typeof tagify !== 'undefined' && tagify && tagify.removeAllTags) {
-        tagify.removeAllTags();
+        window.isProgrammaticTagChange = true;
+        try {
+            tagify.removeAllTags();
+        } finally {
+            setTimeout(() => {
+                window.isProgrammaticTagChange = false;
+            }, 50);
+        }
     }
     const errorAlert = document.getElementById("item-error-alert");
     if (errorAlert) errorAlert.classList.add("d-none");
@@ -1707,6 +1761,11 @@ function resetModal(skipHide = false) {
     removeLocalStorage();
     clearAll();
     clickedCells = [];
+}
+
+function resetModal(skipHide = false) {
+    clearItemFormFields();
+    resetItemFormDirty();
 
     if (!skipHide) {
         const modalEl = document.getElementById('item-modal');
@@ -1714,8 +1773,8 @@ function resetModal(skipHide = false) {
     }
 }
 
-let currentSortMethod = '';
-let currentSortDirection = 'asc';
+let currentSortMethod = 'id';
+let currentSortDirection = 'desc';
 
 function parseItemPosition(val) {
     const pos = parsePositionsArray(val);
@@ -1740,9 +1799,6 @@ function setSortDirection(direction, event) {
         event.preventDefault();
     }
     currentSortDirection = direction;
-    if (!currentSortMethod) {
-        currentSortMethod = 'name';
-    }
     sortItems(currentSortMethod, currentSortDirection);
 }
 
@@ -1793,8 +1849,8 @@ function updateSortUI() {
 }
 
 function sortItems(sortMethod = currentSortMethod, direction = currentSortDirection) {
-    currentSortMethod = sortMethod || 'name';
-    currentSortDirection = direction || 'asc';
+    currentSortMethod = sortMethod || 'id';
+    currentSortDirection = direction || 'desc';
 
     const itemsContainer = document.getElementById('items-container-grid');
     if (!itemsContainer) return;

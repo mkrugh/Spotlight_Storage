@@ -68,20 +68,20 @@
                     <ul class="dropdown-menu dropdown-menu-end" id="sort_method">
                         <li class="px-2 py-1">
                             <div class="btn-group w-100 btn-group-sm" role="group" aria-label="Sort direction">
-                                <button type="button" class="btn btn-outline-primary active" id="sort-dir-asc" onclick="setSortDirection('asc', event)">
+                                <button type="button" class="btn btn-outline-primary" id="sort-dir-asc" onclick="setSortDirection('asc', event)">
                                     <i data-lucide="arrow-up" class="me-1"></i><span id="sortAsc_text">Asc</span>
                                 </button>
-                                <button type="button" class="btn btn-outline-primary" id="sort-dir-desc" onclick="setSortDirection('desc', event)">
+                                <button type="button" class="btn btn-outline-primary active" id="sort-dir-desc" onclick="setSortDirection('desc', event)">
                                     <i data-lucide="arrow-down" class="me-1"></i><span id="sortDesc_text">Desc</span>
                                 </button>
                             </div>
                         </li>
                         <li><hr class="dropdown-divider my-1"></li>
-                        <li><a id="sortBybox" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('ip', event)"><span class="d-flex align-items-center"><i data-lucide="box" class="me-2"></i><span class="sort-label">Box</span></span><span class="sort-indicator ms-2"></span></a></li>
-                        <li><a id="sortByid" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('id', event)"><span class="d-flex align-items-center"><i data-lucide="hash" class="me-2"></i><span class="sort-label">ID</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortBybox" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('ip', event)"><span class="d-flex align-items-center"><i data-lucide="box" class="me-2"></i><span class="sort-label">Cabinet / Controller</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortByid" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('id', event)"><span class="d-flex align-items-center"><i data-lucide="hash" class="me-2"></i><span class="sort-label">Date Added</span></span><span class="sort-indicator ms-2"></span></a></li>
                         <li><a id="sortByname" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('name', event)"><span class="d-flex align-items-center"><i data-lucide="type" class="me-2"></i><span class="sort-label">Name</span></span><span class="sort-indicator ms-2"></span></a></li>
                         <li><a id="sortByquantity" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('quantity', event)"><span class="d-flex align-items-center"><i data-lucide="boxes" class="me-2"></i><span class="sort-label">Quantity</span></span><span class="sort-indicator ms-2"></span></a></li>
-                        <li><a id="sortBylocation" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('position', event)"><span class="d-flex align-items-center"><i data-lucide="map-pin" class="me-2"></i><span class="sort-label">Location</span></span><span class="sort-indicator ms-2"></span></a></li>
+                        <li><a id="sortBylocation" class="dropdown-item d-flex align-items-center justify-content-between" href="#" onclick="handleSortClick('position', event)"><span class="d-flex align-items-center"><i data-lucide="map-pin" class="me-2"></i><span class="sort-label">Bin #</span></span><span class="sort-indicator ms-2"></span></a></li>
                     </ul>
                 </div>
 
@@ -360,7 +360,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="item-modal-label">Add Item</h1>
-                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close" onclick="resetModal()"> </button>
+                    <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-danger d-none" id="item-error-alert">Please enter values in the follow empty fields:<br><span id="item-error-list"></span>
@@ -399,9 +399,14 @@
                                     <i data-lucide="upload" class="me-1"></i><span id="item_imageUplad_label">Upload File</span>
                                 </button>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto d-none" id="btn-clear-item-image" title="Remove image">
-                                <i data-lucide="trash-2" class="me-1"></i><span>Clear</span>
-                            </button>
+                            <div class="ms-auto d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary d-none" id="btn-crop-item-image" title="Crop image">
+                                    <i data-lucide="crop" class="me-1"></i><span>Crop</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger d-none" id="btn-clear-item-image" title="Remove image">
+                                    <i data-lucide="trash-2" class="me-1"></i><span>Clear</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="item-image-url-group">
                             <input type="url" class="form-control" id="item_image" placeholder="https://example.com/image.jpg">
@@ -459,7 +464,7 @@
 
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary pe-3" id="cancel-item-button" data-dialog-dismiss  onclick="resetModal()">
+                    <button type="button" class="btn btn-secondary pe-3" id="cancel-item-button" data-dialog-dismiss>
                         <span class="icon-n4px">
                             <i data-lucide="x" class="me-2"></i>
                         </span>
@@ -594,14 +599,47 @@
                     <button type="button" class="btn-close" data-dialog-dismiss aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="max-height: 40rem; overflow: hidden; padding: 0;">
-                    <div class="img-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden;">
-                        <img id="imageToCrop" src="" alt="Image to Crop" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    <div class="img-container" style="width: 100%; height: 460px; max-height: 65vh; background-color: #1a1a1a; position: relative; overflow: hidden;">
+                        <img id="imageToCrop" src="" alt="Image to Crop" style="display: block; max-width: 100%;">
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="cropCancel" data-dialog-dismiss>Cancel</button>
-                    <button id="download-image-btn" class="btn btn-primary">Download Image</button>
-                    <button type="button" class="btn btn-primary" id="cropAndSaveBtn" data-dialog-dismiss>Crop and save</button>
+                <div class="modal-footer d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <!-- Rotation controls -->
+                        <div class="btn-group" role="group" aria-label="Crop rotation">
+                            <button type="button" class="btn btn-outline-secondary" id="rotate-left-btn" title="Rotate 90° Counter-Clockwise" aria-label="Rotate 90° Counter-Clockwise">
+                                <i data-lucide="rotate-ccw"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="rotate-right-btn" title="Rotate 90° Clockwise" aria-label="Rotate 90° Clockwise">
+                                <i data-lucide="rotate-cw"></i>
+                            </button>
+                        </div>
+                        <!-- Aspect ratio presets: Free by default -->
+                        <div class="btn-group" role="group" aria-label="Crop aspect ratio">
+                            <button type="button" class="btn btn-outline-secondary active" id="crop-aspect-free" title="Free / Unconstrained Aspect Ratio">
+                                Free
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="crop-aspect-square" title="Square (1:1) Aspect Ratio">
+                                1:1
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="crop-aspect-card" title="Card (4:3) Aspect Ratio">
+                                4:3
+                            </button>
+                        </div>
+                        <!-- Full Image / No-Crop toggle -->
+                        <button type="button" class="btn btn-outline-secondary" id="crop-full-btn" title="Use full image without cropping">
+                            <i data-lucide="expand" class="me-1"></i><span>Full Image</span>
+                        </button>
+                        <!-- Reset image & crop -->
+                        <button type="button" class="btn btn-outline-secondary" id="crop-reset-btn" title="Reset image and crop">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 ms-auto">
+                        <button type="button" class="btn btn-secondary" id="cropCancel" data-dialog-dismiss>Cancel</button>
+                        <button id="download-image-btn" class="btn btn-outline-secondary">Download Image</button>
+                        <button type="button" class="btn btn-primary" id="cropAndSaveBtn">Crop and save</button>
+                    </div>
                 </div>
             </div>
         </div>

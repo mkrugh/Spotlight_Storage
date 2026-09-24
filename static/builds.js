@@ -227,9 +227,9 @@ function addPartRow(items, selectedItemId, qty) {
     const menuId = `build-part-menu-${rowId}`;
 
     const row = document.createElement('div');
-    row.className = 'd-flex align-items-center mb-2 build-part-row flex-wrap gap-2';
+    row.className = 'd-flex align-items-center mb-2 build-part-row gap-2';
     row.innerHTML = `
-        <div class="build-part-search-container position-relative flex-grow-1" style="min-width: 180px;">
+        <div class="build-part-search-container position-relative flex-grow-1">
             <input type="hidden" class="build-part-id" value="${safeEscape(selectedItemId || '')}">
             <input type="text" class="form-control form-control-sm build-part-search-input" 
                    placeholder="Search by part name or tag..." value="${safeEscape(initialName)}" 

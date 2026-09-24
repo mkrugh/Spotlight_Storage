@@ -551,6 +551,7 @@ function handleCellClick(event, mode) {
                 }
 
                 localStorage.setItem('led_positions', JSON.stringify(clickedCells));
+                if (typeof markItemFormDirty === 'function') markItemFormDirty();
                 redrawMultiSectionGrid(mode, normalizedSections);
                 return;
             }
@@ -607,6 +608,7 @@ function handleCellClick(event, mode) {
     }
 
     localStorage.setItem('led_positions', JSON.stringify(clickedCells));
+    if (typeof markItemFormDirty === 'function') markItemFormDirty();
     redrawGrid(rows, columns, "item", startX, startY, serpentineDirection);
 }
 

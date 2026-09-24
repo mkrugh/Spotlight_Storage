@@ -152,6 +152,8 @@ label {
 
 .tagify__dropdown {
     background-color: #f8f9fa; /* Set the background color to match Bootstrap theme */
+    z-index: 1065;
+    margin-top: 4px;
 }
 
 .tagify__dropdown__item {
@@ -508,12 +510,26 @@ label {
 }
 
 .app-navbar .btn.icon-n6px {
-    width: 38px;
-    height: 38px;
-    padding: 0 !important;
+    min-width: 40px;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 8px !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+}
+
+.app-navbar .btn.icon-n6px.dropdown-toggle::after,
+.app-navbar .btn.icon-n6px::after {
+    display: none !important;
+}
+
+.app-navbar .btn.icon-n6px svg,
+.app-navbar .btn.icon-n6px i {
+    width: 24px;
+    height: 24px;
+    pointer-events: none;
     flex-shrink: 0;
 }
 
@@ -1724,6 +1740,25 @@ dialog.legacy-dialog-polyfill {
 
 .cursor-pointer {
     cursor: pointer;
+}
+
+.build-part-row {
+    min-height: 44px;
+    flex-wrap: nowrap;
+}
+
+.build-part-row .build-part-search-container {
+    flex: 1 1 45%;
+    min-width: 140px;
+}
+
+.build-part-row .part-stock-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 130px;
+    text-align: center;
+    flex-shrink: 0;
 }
 
 /* Build Part Search Picker */

@@ -62,20 +62,43 @@ async function processCroppedImage(croppedImageFile, item) {
 function initializeCropper(imageElement) {
     if (cropper) {
         cropper.destroy(); // Destroy the existing Cropper instance if any
+        cropper = null;
     }
 
-    // Initialize Cropper only after the image has fully loaded
-    if (imageElement.complete) {
+    if (!imageElement || !imageElement.src || imageElement.src === window.location.href) {
+        return;
+    }
+
+    const startCropper = () => {
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
         requestAnimationFrame(() => {
             cropper = new Cropper(imageElement, {
-                aspectRatio: 1,  // 1:1 aspect ratio
+                aspectRatio: NaN,  // Free / unconstrained aspect ratio by default
                 viewMode: 1,
+                autoCropArea: 1,   // Encompass 100% of image initially so nothing is cut off
+                responsive: true,
                 movable: true,
                 zoomable: true,
                 rotatable: true,
                 scalable: true,
             });
+            updateCropPresetUI('free');
+            if (window.lucide) {
+                lucide.createIcons();
+            }
         });
+    };
+
+    // Initialize Cropper only after the image has fully loaded
+    if (imageElement.complete && imageElement.naturalWidth > 0) {
+        startCropper();
+    } else {
+        imageElement.onload = () => {
+            startCropper();
+        };
     }
 }
 
@@ -83,9 +106,12 @@ function initializeCropper(imageElement) {
 function handleCropAndSave(item) {
     if (!cropper) return;
 
+    // Preserve natural unconstrained aspect ratio without forcing 400x400 square distortion
     const croppedCanvas = cropper.getCroppedCanvas({
-        width: 300,
-        height: 300,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
     });
 
     if (!croppedCanvas) {
@@ -99,33 +125,65 @@ function handleCropAndSave(item) {
             return;
         }
 
-        const originalFileName = item.image.split('/').pop();
-        let fileExtension = originalFileName.split('.').pop();
-        const baseFileName = item.name.trim();
-        // Check if the file extension is valid
-        const validExtensions = ['png', 'jpeg', 'jpg','webp'];
-        if (!validExtensions.includes(fileExtension)) {
-            // If the extension is not valid, default to 'jpg'
-            fileExtension = 'webp';
+        const croppedImageFile = new File([blob], 'cropped.jpg', { type: 'image/jpeg' });
+        const formData = new FormData();
+        formData.append('file', croppedImageFile);
+
+        try {
+            const response = await fetch('/upload', { body: formData, method: 'POST' });
+            if (!response.ok) {
+                throw new Error(`Upload failed with status ${response.status}`);
+            }
+            const imageURL = await response.text();
+            const fullImageUrl = new URL(imageURL, window.location.origin).href;
+
+            const itemModal = document.getElementById('item-modal');
+            const isItemModalOpen = itemModal && itemModal.open;
+
+            if (isItemModalOpen || !item || !item.id) {
+                const itemImgInput = document.getElementById('item_image');
+                if (itemImgInput) {
+                    itemImgInput.value = imageURL;
+                }
+                updateItemImagePreview(imageURL);
+                if (typeof markItemFormDirty === 'function') {
+                    markItemFormDirty();
+                } else if (typeof isItemFormDirty !== 'undefined') {
+                    isItemFormDirty = true;
+                }
+            } else if (item && item.id) {
+                await handleImageChange(item, imageURL);
+                item.image = fullImageUrl;
+                const col = document.getElementById('items-container-grid')?.querySelector(`div[data-id="${item.id}"]`);
+                if (col && typeof createItem === 'function') {
+                    const updatedCol = createItem(item);
+                    document.getElementById('items-container-grid').replaceChild(updatedCol, col);
+                    if (window.lucide) lucide.createIcons();
+                }
+            }
+        } catch (error) {
+            console.error('Error uploading cropped image:', error);
+        } finally {
+            const cropImageModal = document.getElementById('cropImageModal');
+            if (cropImageModal) {
+                resetModalAndCropper(cropImageModal);
+            }
         }
-
-        const croppedFileName = `${baseFileName}_cropped.${fileExtension}`;
-        const croppedImageFile = new File([blob], croppedFileName, { type: blob.type });
-
-        await processCroppedImage(croppedImageFile, item);
-    });
+    }, 'image/jpeg', 0.85);
 }
 
 // Function to handle crop and save button using dataset values
 function onCropAndSave() {
     const cropImageModal = document.getElementById('cropImageModal');
-
-    // Retrieve item details from modal dataset
-    const item = JSON.parse(cropImageModal.dataset.item);
-
-    console.log("saving image", item)
+    let item = null;
+    if (cropImageModal && cropImageModal.dataset.item) {
+        try {
+            item = JSON.parse(cropImageModal.dataset.item);
+        } catch (e) {
+            item = null;
+        }
+    }
     handleCropAndSave(item);
-    resetModalAndCropper(cropImageModal);
 }
 
 // Function to handle image change in the database
@@ -135,7 +193,7 @@ function handleImageChange(item, url) {
 
     const updatedItem = { image: url };
 
-    fetch(`/api/items/${itemId}`, {
+    return fetch(`/api/items/${itemId}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
@@ -161,20 +219,27 @@ function resetModalAndCropper(modalElement) {
         cropper = null;
     }
 
-    // Clear the image source
-    document.getElementById('imageToCrop').src = '';
+    // Clear the image source and pending load handler
+    const imageElement = document.getElementById('imageToCrop');
+    if (imageElement) {
+        imageElement.onload = null;
+        imageElement.src = '';
+    }
 
-    // Clear dataset attributes
-    modalElement.dataset.itemName = '';
-    modalElement.dataset.itemImage = '';
+    if (modalElement) {
+        // Clear dataset attributes
+        modalElement.dataset.itemName = '';
+        modalElement.dataset.itemImage = '';
+        delete modalElement.dataset.item;
 
-    // Hide the modal
-    if (typeof DialogManager !== 'undefined') {
-        DialogManager.close(modalElement.id);
-    } else {
-        const modal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? bootstrap.Modal.getInstance(modalElement) : null;
-        if (modal) {
-            modal.hide();
+        // Hide the modal if currently open
+        if (typeof DialogManager !== 'undefined' && modalElement.open) {
+            DialogManager.close(modalElement.id);
+        } else if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
         }
     }
 }
@@ -189,15 +254,142 @@ function isValidUrl(str) {
     }
 }
 
-// Event listener to initialize cropper when the modal is fully shown
-$('#cropImageModal').on('shown.bs.modal', function () {
-    const imageElement = document.getElementById('imageToCrop');
+// Function to check if a URL is external (http/https and not current origin)
+function isExternalUrl(str) {
+    if (!str || typeof str !== 'string') return false;
+    try {
+        const parsed = new URL(str, window.location.href);
+        return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin !== window.location.origin;
+    } catch (e) {
+        return false;
+    }
+}
 
-    // Use requestAnimationFrame to ensure all rendering is complete
-    requestAnimationFrame(() => {
-        initializeCropper(imageElement);
-    });
-});
+// Initialize crop modal event listeners
+function initCropModalEvents() {
+    const cropModal = document.getElementById('cropImageModal');
+    if (cropModal && !cropModal._cropModalEventsBound) {
+        cropModal._cropModalEventsBound = true;
+        cropModal.addEventListener('shown.bs.modal', function () {
+            const imageElement = document.getElementById('imageToCrop');
+            initializeCropper(imageElement);
+        });
+    }
+}
+
+// UI state helper for crop aspect ratio presets
+function updateCropPresetUI(activePreset) {
+    const btnFree = document.getElementById('crop-aspect-free');
+    const btnSquare = document.getElementById('crop-aspect-square');
+    const btnCard = document.getElementById('crop-aspect-card');
+    const btnFull = document.getElementById('crop-full-btn');
+
+    if (btnFree) btnFree.classList.toggle('active', activePreset === 'free');
+    if (btnSquare) btnSquare.classList.toggle('active', activePreset === 'square');
+    if (btnCard) btnCard.classList.toggle('active', activePreset === 'card');
+    if (btnFull) {
+        btnFull.classList.toggle('active', activePreset === 'full');
+        const textSpan = btnFull.querySelector('span');
+        if (textSpan) {
+            textSpan.textContent = activePreset === 'full' ? 'Show Crop Box' : 'Full Image';
+        }
+    }
+}
+
+// Initialize rotation and crop control buttons for crop modal
+function initCropControlsUI() {
+    const rotateLeftBtn = document.getElementById('rotate-left-btn');
+    const rotateRightBtn = document.getElementById('rotate-right-btn');
+    const btnFree = document.getElementById('crop-aspect-free');
+    const btnSquare = document.getElementById('crop-aspect-square');
+    const btnCard = document.getElementById('crop-aspect-card');
+    const btnFull = document.getElementById('crop-full-btn');
+    const btnReset = document.getElementById('crop-reset-btn');
+
+    if (rotateLeftBtn && !rotateLeftBtn._rotateBound) {
+        rotateLeftBtn._rotateBound = true;
+        rotateLeftBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                cropper.rotate(-90);
+            }
+        });
+    }
+    if (rotateRightBtn && !rotateRightBtn._rotateBound) {
+        rotateRightBtn._rotateBound = true;
+        rotateRightBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                cropper.rotate(90);
+            }
+        });
+    }
+
+    if (btnFree && !btnFree._aspectBound) {
+        btnFree._aspectBound = true;
+        btnFree.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                if (!cropper.cropped) cropper.crop();
+                cropper.setAspectRatio(NaN);
+                updateCropPresetUI('free');
+            }
+        });
+    }
+
+    if (btnSquare && !btnSquare._aspectBound) {
+        btnSquare._aspectBound = true;
+        btnSquare.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                if (!cropper.cropped) cropper.crop();
+                cropper.setAspectRatio(1);
+                updateCropPresetUI('square');
+            }
+        });
+    }
+
+    if (btnCard && !btnCard._aspectBound) {
+        btnCard._aspectBound = true;
+        btnCard.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                if (!cropper.cropped) cropper.crop();
+                cropper.setAspectRatio(4 / 3);
+                updateCropPresetUI('card');
+            }
+        });
+    }
+
+    if (btnFull && !btnFull._fullBound) {
+        btnFull._fullBound = true;
+        btnFull.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                if (cropper.cropped) {
+                    cropper.clear();
+                    updateCropPresetUI('full');
+                } else {
+                    cropper.crop();
+                    cropper.setAspectRatio(NaN);
+                    updateCropPresetUI('free');
+                }
+            }
+        });
+    }
+
+    if (btnReset && !btnReset._resetBound) {
+        btnReset._resetBound = true;
+        btnReset.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (cropper) {
+                cropper.reset();
+                cropper.setAspectRatio(NaN);
+                updateCropPresetUI('free');
+            }
+        });
+    }
+}
 
 // UI-09: Item Modal Segmented Image Input & Live Preview
 function updateItemImagePreview(imageUrl) {
@@ -205,6 +397,7 @@ function updateItemImagePreview(imageUrl) {
     const previewTag = document.getElementById('item-img-preview-tag');
     const placeholder = document.getElementById('item-img-placeholder');
     const clearBtn = document.getElementById('btn-clear-item-image');
+    const cropBtn = document.getElementById('btn-crop-item-image');
 
     if (!previewContainer || !previewTag || !placeholder) return;
 
@@ -214,11 +407,13 @@ function updateItemImagePreview(imageUrl) {
             previewTag.classList.remove('d-none');
             placeholder.classList.add('d-none');
             if (clearBtn) clearBtn.classList.remove('d-none');
+            if (cropBtn) cropBtn.classList.remove('d-none');
         };
         previewTag.onerror = function() {
             previewTag.classList.add('d-none');
             placeholder.classList.remove('d-none');
             if (clearBtn) clearBtn.classList.remove('d-none');
+            if (cropBtn) cropBtn.classList.add('d-none');
         };
         previewTag.src = trimmed;
     } else {
@@ -226,6 +421,7 @@ function updateItemImagePreview(imageUrl) {
         previewTag.classList.add('d-none');
         placeholder.classList.remove('d-none');
         if (clearBtn) clearBtn.classList.add('d-none');
+        if (cropBtn) cropBtn.classList.add('d-none');
     }
 }
 
@@ -237,6 +433,7 @@ function initItemImageUI() {
     const urlInput = document.getElementById('item_image');
     const fileInput = document.getElementById('item_image_upload');
     const clearBtn = document.getElementById('btn-clear-item-image');
+    const cropBtn = document.getElementById('btn-crop-item-image');
 
     if (btnUrlMode && btnUploadMode) {
         btnUrlMode.addEventListener('click', () => {
@@ -288,10 +485,59 @@ function initItemImageUI() {
             updateItemImagePreview('');
         });
     }
+
+    if (cropBtn) {
+        cropBtn.addEventListener('click', () => {
+            const previewTag = document.getElementById('item-img-preview-tag');
+            const imageElement = document.getElementById('imageToCrop');
+            const downloadButton = document.getElementById('download-image-btn');
+            if (!previewTag || !previewTag.src || previewTag.classList.contains('d-none')) return;
+
+            const cropImageModal = document.getElementById('cropImageModal');
+            if (cropImageModal) {
+                delete cropImageModal.dataset.item;
+            }
+
+            if (downloadButton) downloadButton.style.display = 'none';
+
+            const rawSrc = previewTag.src;
+            if (isExternalUrl(rawSrc)) {
+                fetchWithTimeout(`/proxy-image?url=${encodeURIComponent(rawSrc)}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        imageElement.src = URL.createObjectURL(blob);
+                        if (typeof DialogManager !== 'undefined') {
+                            DialogManager.open('cropImageModal');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching image for crop:', error);
+                        imageElement.src = rawSrc;
+                        if (typeof DialogManager !== 'undefined') {
+                            DialogManager.open('cropImageModal');
+                        }
+                    });
+            } else {
+                imageElement.src = rawSrc;
+                if (typeof DialogManager !== 'undefined') {
+                    DialogManager.open('cropImageModal');
+                }
+            }
+        });
+    }
+}
+
+function initAllImageHandlers() {
+    initCropModalEvents();
+    initCropControlsUI();
+    initItemImageUI();
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initItemImageUI);
+    document.addEventListener('DOMContentLoaded', initAllImageHandlers);
 } else {
-    initItemImageUI();
+    initAllImageHandlers();
 }

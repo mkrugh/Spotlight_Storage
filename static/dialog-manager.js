@@ -19,7 +19,7 @@ window.DialogManager = (function() {
     const triggerEvent = (element, eventName, relatedTarget = null) => {
         const event = new Event(eventName, { bubbles: true, cancelable: true });
         event.relatedTarget = relatedTarget;
-        element.dispatchEvent(event);
+        return element.dispatchEvent(event);
     };
 
     const handleBackdropClick = (event, dialogEl) => {
@@ -27,10 +27,13 @@ window.DialogManager = (function() {
             return;
         }
         
-        // With dialog covering the full screen (like Bootstrap .modal),
-        // clicking outside .modal-dialog hits the <dialog> element directly.
-        // Also verify the click did not originate from a child element (e.g. nested click)
-        if (event.target === dialogEl) {
+        // Only close if BOTH mousedown and click originated directly on dialogEl (the backdrop).
+        // This prevents accidental dismissals when dragging (e.g. crop handles, sliders, selection)
+        // starts inside the modal content but the mouse is released outside.
+        const startedOnBackdrop = dialogEl._mouseDownTarget === dialogEl;
+        dialogEl._mouseDownTarget = null;
+
+        if (event.target === dialogEl && startedOnBackdrop) {
             closeDialog(dialogEl.id);
         }
     };
@@ -66,7 +69,14 @@ window.DialogManager = (function() {
                     backdrop = document.createElement('div');
                     backdrop.id = `backdrop-${id}`;
                     backdrop.className = 'legacy-dialog-backdrop';
-                    backdrop.addEventListener('click', () => closeDialog(id));
+                    let polyfillMouseDown = null;
+                    backdrop.addEventListener('mousedown', (e) => { polyfillMouseDown = e.target; });
+                    backdrop.addEventListener('click', (e) => {
+                        if (e.target === backdrop && polyfillMouseDown === backdrop) {
+                            closeDialog(id);
+                        }
+                        polyfillMouseDown = null;
+                    });
                     document.body.appendChild(backdrop);
                 }
             }
@@ -76,9 +86,13 @@ window.DialogManager = (function() {
         document.body.classList.add('dialog-open');
 
         if (!dialogEl._dialogManagerInitialized) {
+            dialogEl._mouseDownTarget = null;
             dialogEl.addEventListener('cancel', (e) => {
                 e.preventDefault();
                 closeDialog(id);
+            });
+            dialogEl.addEventListener('mousedown', (e) => {
+                dialogEl._mouseDownTarget = e.target;
             });
             dialogEl.addEventListener('click', (e) => {
                 const dismissBtn = e.target.closest('[data-dialog-dismiss], [data-bs-dismiss="modal"]');
@@ -109,7 +123,10 @@ window.DialogManager = (function() {
         const dialogEl = document.getElementById(id);
         if (!dialogEl) return;
 
-        triggerEvent(dialogEl, 'hide.bs.modal');
+        const allowed = triggerEvent(dialogEl, 'hide.bs.modal');
+        if (allowed === false) {
+            return;
+        }
 
         if (supportsNativeDialog) {
             if (dialogEl.open) {

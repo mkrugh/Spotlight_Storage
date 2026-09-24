@@ -103,7 +103,7 @@ Here is the full list of all 74 translation keys currently used in Spotlight Sto
 | `sortByid` | ID |
 | `sortByname` | Name |
 | `sortByquantity` | Quantity |
-| `sortBylocation` | Location |
+| `sortBylocation` | Bin # |
 | `sortAsc` | Ascending |
 | `sortDesc` | Descending |
 | `minus_btn_label` | -1 |

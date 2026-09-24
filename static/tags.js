@@ -7,15 +7,30 @@ let tagFilterMode = localStorage.getItem('tag_filter_mode') || 'any';
 const tagify = new Tagify(input, {
     whitelist: [],
     dropdown: {
-        enabled: 0,
+        enabled: 1,
+        position: 'all',
+        placeAbove: false,
+        highlightFirst: true,
         appendTarget: document.getElementById('item-modal') || document.body
     },
     duplicates: false, // Disallow duplicate tags
     maxTags: maxSelectedTags // Set a maximum limit for tags (adjust as needed)
 });
 
-tagify.on('add', SubmitTags);
-tagify.on('remove', SubmitTags);
+window.isProgrammaticTagChange = false;
+
+tagify.on('add', (e) => {
+    SubmitTags(e);
+    if (!window.isProgrammaticTagChange && e.detail && (e.detail.tag || e.detail.data) && typeof markItemFormDirty === 'function') {
+        markItemFormDirty();
+    }
+});
+tagify.on('remove', (e) => {
+    SubmitTags(e);
+    if (!window.isProgrammaticTagChange && e.detail && (e.detail.tag || e.detail.data) && typeof markItemFormDirty === 'function') {
+        markItemFormDirty();
+    }
+});
 
 function commitTagifyInput() {
     if (typeof tagify !== 'undefined' && tagify && tagify.DOM && tagify.DOM.input) {
@@ -141,15 +156,22 @@ function fetchDataAndLoadTags() {
 
 function loadTagsIntoTagify(tagsToLoad) {
     if (!tagify) return;
-    tagify.removeAllTags();
-    if (tagsToLoad) {
-        const tagList = Array.isArray(tagsToLoad) ? tagsToLoad : [tagsToLoad];
-        const cleaned = tagList
-            .map(t => (typeof t === 'object' && t !== null ? t.value : t))
-            .filter(t => t !== undefined && t !== null && String(t).trim().length > 0);
-        if (cleaned.length > 0) {
-            tagify.addTags(cleaned);
+    window.isProgrammaticTagChange = true;
+    try {
+        tagify.removeAllTags();
+        if (tagsToLoad) {
+            const tagList = Array.isArray(tagsToLoad) ? tagsToLoad : [tagsToLoad];
+            const cleaned = tagList
+                .map(t => (typeof t === 'object' && t !== null ? t.value : t))
+                .filter(t => t !== undefined && t !== null && String(t).trim().length > 0);
+            if (cleaned.length > 0) {
+                tagify.addTags(cleaned);
+            }
         }
+    } finally {
+        setTimeout(() => {
+            window.isProgrammaticTagChange = false;
+        }, 50);
     }
 }
 

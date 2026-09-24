@@ -4,7 +4,7 @@
 # Spotlight Storage
 > Smart Parts Storage with WLED & Addressable LEDs
 
-[![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen)](#testing--quality)
+[![Tests](https://img.shields.io/badge/tests-178%20passing-brightgreen)](#testing--quality)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](#system-requirements)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](#quick-start)
 [![WLED](https://img.shields.io/badge/WLED-compatible-orange)](#hardware--wiring)
@@ -29,11 +29,11 @@ This project is built on the foundation of FireMarshmellow/Spotlight_Storage and
 | Cabinet types | Single-section grid only | Single & multi-section (arbitrary tier count) | [Cabinet Configuration](docs/cabinet_configuration.md) |
 | Inventory health | None | Three-tier pill system (Unassigned / Low Stock / Out of Stock) | [Inventory Health](docs/inventory_health.md) |
 | Builds / BOM recipes | None | Full build & recipe system with readiness tracking and stock deduction | [Builds & Recipes](docs/builds_and_recipes.md) |
-| Map inspector | None | Interactive drawer map with per-bin inspector panel | [docs/cabinet_configuration.md] |
-| Image management | None | Built-in image uploader with drag-to-crop tool | — |
+| Map inspector | None | Interactive drawer map with per-bin inspector panel | [Cabinet Configuration](docs/cabinet_configuration.md) |
+| Image management | None | Built-in uploader, unconstrained crop, 90° rotation, & aspect ratio presets | — |
 | Tag system | Basic | AND/OR match modes with relevance-ranked results | — |
 | External dependencies | CDN-loaded libraries | 100% offline — all frontend libraries vendored locally | — |
-| Automated tests | None | 169 tests (unit, integration, security, Playwright UI) | [tests/README.md] |
+| Automated tests | None | 178 tests (unit, integration, security, Playwright UI) | [Test Suite](tests/README.md) |
 | Security hardening | None | SSRF protection, path traversal defense, secure HTTP headers, non-root Docker | — |
 | Languages | 1 (English) | 6 (EN, DE, FR, NL, FI, PL) | [Multilingual Guide](docs/multilingual.md) |
 | Documentation | Minimal | Full docs suite (hardware, API, deployment, builds, i18n) | [Documentation](#documentation) |
@@ -71,8 +71,8 @@ Create named project builds listing the exact parts and quantities needed. Real-
 ### 🏷 Tag Filtering & Relevance Sorting
 Filter your inventory by one or more tags using **Any (OR)** or **All (AND)** match mode. Results are automatically ranked by the number of matching tags — the most relevant parts surface first.
 
-### 📸 Built-In Image Uploader & Cropper
-Upload part photos directly in the browser. An integrated drag-to-crop tool lets you frame the shot precisely before saving — no external editing required.
+### 📸 Built-In Image Uploader, Cropper & Rotation
+Upload part photos directly in the browser or paste external image URLs. The integrated editing modal provides unconstrained / freeform cropping, aspect ratio presets (Free, 1:1, 4:3), 90° rotation controls, and a Full Image toggle to rotate without cropping.
 
 ### 🌙 / ☀️ Light & Dark Mode
 <!-- screenshot: main-dashboard-light.png -->
@@ -187,7 +187,7 @@ For the full API specification with payload schemas, response shapes, and curl e
 
 ## Testing & Quality
 
-169 automated tests covering unit logic, database operations, REST endpoints, WLED LED pulse behaviour, security constraints, concurrency, and Playwright UI flows.
+178 automated tests covering unit logic, database operations, REST endpoints, WLED LED pulse behaviour, security constraints, concurrency, and Playwright UI flows.
 
 ```bash
 # Run full test suite
