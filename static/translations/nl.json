@@ -71,5 +71,22 @@
     "link_btn_label": "Winkel voor meer",
     "tag_match_mode": "Overeenkomstmodus",
     "tag_match_any": "Elke (OF)",
-    "tag_match_all": "Alle (EN)"
+    "tag_match_all": "Alle (EN)",
+    "cabinet_unconfigured": "Niet geconfigureerd",
+    "cabinet_full": "Vol",
+    "cabinet_overcapacity": "Overcapaciteit",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} bakken · {{percent}}% vol",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} bakken · 100% vol · Overcapaciteit",
+    "cabinet_bins_full": "{{occupied}}/{{total}} bakken · 100% vol · Vol",
+    "assign_part_to_bin": "Onderdeel aan deze bak toewijzen",
+    "assigned_from_map": "Toegewezen vanaf plattegrond",
+    "move_part": "Onderdeel verplaatsen",
+    "cancel_move": "Verplaatsen annuleren",
+    "moving_part_banner": "Verplaatsen van {{part}} (Bak #{{bin}}). Klik op doelbak of Annuleren.",
+    "confirm_move_title": "Onderdeel verplaatsen",
+    "confirm_move_msg": "{{part}} naar bak {{bin}} verplaatsen?",
+    "confirm_occupied_title": "Bak bezet",
+    "confirm_occupied_msg": "Bak {{bin}} bevat al {{target_part}}. Wat wilt u doen?",
+    "btn_swap_locations": "Locaties omwisselen",
+    "btn_colocate": "Toevoegen (Samen opslaan)"
 }

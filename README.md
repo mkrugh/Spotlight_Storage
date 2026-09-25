@@ -4,7 +4,7 @@
 # Spotlight Storage
 > Smart Parts Storage with WLED & Addressable LEDs
 
-[![Tests](https://img.shields.io/badge/tests-178%20passing-brightgreen)](#testing--quality)
+[![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen)](#testing--quality)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](#system-requirements)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](#quick-start)
 [![WLED](https://img.shields.io/badge/WLED-compatible-orange)](#hardware--wiring)
@@ -33,7 +33,7 @@ This project is built on the foundation of FireMarshmellow/Spotlight_Storage and
 | Image management | None | Built-in uploader, unconstrained crop, 90° rotation, & aspect ratio presets | — |
 | Tag system | Basic | AND/OR match modes with relevance-ranked results | — |
 | External dependencies | CDN-loaded libraries | 100% offline — all frontend libraries vendored locally | — |
-| Automated tests | None | 178 tests (unit, integration, security, Playwright UI) | [Test Suite](tests/README.md) |
+| Automated tests | None | 198 tests (unit, integration, security, Playwright UI) | [Test Suite](tests/README.md) |
 | Security hardening | None | SSRF protection, path traversal defense, secure HTTP headers, non-root Docker | — |
 | Languages | 1 (English) | 6 (EN, DE, FR, NL, FI, PL) | [Multilingual Guide](docs/multilingual.md) |
 | Documentation | Minimal | Full docs suite (hardware, API, deployment, builds, i18n) | [Documentation](#documentation) |
@@ -45,7 +45,7 @@ This project is built on the foundation of FireMarshmellow/Spotlight_Storage and
 ### 🗺 Interactive Drawer Map & Bin Inspector
 <!-- screenshot: map-inspector.png -->
 ![Map Inspector](images/map-inspector.png)
-Visually navigate your full cabinet layout. Click any bin to see exactly which part is stored there, its quantity, and its status — without touching the main inventory list.
+Visually navigate your full cabinet layout and monitor real-time bin utilization metrics. Click any bin to see exactly which part is stored there, its quantity, and its status. Click an empty bin to instantly assign a new or existing part directly from the map.
 
 ### 🏗 Multi-Section Cabinet Builder
 <!-- screenshot: cabinet-sectioning.png -->
@@ -187,7 +187,7 @@ For the full API specification with payload schemas, response shapes, and curl e
 
 ## Testing & Quality
 
-178 automated tests covering unit logic, database operations, REST endpoints, WLED LED pulse behaviour, security constraints, concurrency, and Playwright UI flows.
+198 automated tests covering unit logic, database operations, REST endpoints, WLED LED pulse behaviour, security constraints, concurrency, and Playwright UI flows.
 
 ```bash
 # Run full test suite

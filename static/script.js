@@ -1,5 +1,6 @@
 const selectEspDropdown = document.getElementById("item_esp_select");
 let fetchedItems = []; // Define an array to store fetched items
+window.fetchedItems = fetchedItems;
 let fetchedEsps = []; // Store fetched ESP devices
 let editingItemName = null;
 
@@ -244,6 +245,25 @@ async function addItem(event) {
     const link = document.getElementById("item_url").value || "";
     const image = document.getElementById("item_image").value.replace(window.location.href, "");
     let position = localStorage.getItem('led_positions') || '[]';
+    const hiddenLedInput = document.getElementById('assigned-map-led-num');
+    let parsedPos = [];
+    try {
+        parsedPos = JSON.parse(position);
+    } catch (e) {
+        parsedPos = [];
+    }
+    if (!Array.isArray(parsedPos) || parsedPos.length === 0) {
+        const targetLed = (hiddenLedInput && hiddenLedInput.value)
+            ? parseInt(hiddenLedInput.value, 10)
+            : (window.isAssignedFromMap && window.assignedMapTarget && window.assignedMapTarget.ledNum !== undefined
+                ? parseInt(window.assignedMapTarget.ledNum, 10)
+                : NaN);
+        if (!isNaN(targetLed) && targetLed > 0) {
+            position = JSON.stringify([targetLed]);
+            clickedCells = [targetLed];
+            localStorage.setItem('led_positions', position);
+        }
+    }
     let quantity = document.getElementById("item_quantity").value;
     const minQtyInput = document.getElementById("item_min_quantity");
     let min_quantity = (minQtyInput && minQtyInput.value !== "" && !isNaN(parseInt(minQtyInput.value, 10)))
@@ -257,7 +277,8 @@ async function addItem(event) {
 
 
     // Retrieve the IP address of the selected ESP device
-    const ip = selectedEspOption.dataset.espIp;
+    const hiddenIpInput = document.getElementById('assigned-map-esp-ip');
+    const ip = (hiddenIpInput && hiddenIpInput.value) ? hiddenIpInput.value : (selectedEspOption ? selectedEspOption.dataset.espIp : '');
 
     // Create the item object with gathered information
     const item = {
@@ -949,16 +970,18 @@ function applyPlacementFilterToGrid() {
 }
 
 
-function populateEspDropdown() {
-    let index = 0;
-    selectEspDropdown.innerHTML = "";
-    // Fetch ESP devices
-    fetch("/api/esp").then((response) => response.json()).then((data) => {
-        if (Array.isArray(data)) {
-            fetchedEsps = data;
-        }
-        if (data.length > 0) {
-            // Devices found: Populate dropdown and select the first one
+function renderEspDropdownOptions(data) {
+    if (!selectEspDropdown) return;
+    if (Array.isArray(data)) {
+        fetchedEsps = data;
+    }
+    if (data && data.length > 0) {
+        selectEspDropdown.disabled = window.isAssignedFromMap ? true : false;
+        const currentOpts = Array.from(selectEspDropdown.options).map(o => o.value);
+        const newOpts = data.map(e => String(e.id));
+        const matches = currentOpts.length === newOpts.length && currentOpts.every((v, i) => v === newOpts[i]);
+        if (!matches) {
+            selectEspDropdown.innerHTML = "";
             data.forEach((esp) => {
                 const option = document.createElement("option");
                 option.value = esp.id;
@@ -972,44 +995,66 @@ function populateEspDropdown() {
                 option.dataset.espName = esp.name;
                 option.textContent = esp.name + " (" + esp.esp_ip + ")";
                 selectEspDropdown.appendChild(option);
-
             });
+        }
 
-            if (isEditingItem || isCopyingItem) {
-                index = findIndexByIP(editingItemIP);
-            } else {
-                const activeEsp = getActiveEspTab();
-                if (activeEsp) {
-                    index = findIndexByIP(activeEsp);
-                } else {
-                    index = 0;
+        let index = 0;
+        if (window.isAssignedFromMap && window.assignedMapTarget) {
+            const { espId, espIp } = window.assignedMapTarget;
+            for (let i = 0; i < data.length; i++) {
+                if (String(data[i].id) === String(espId) || (data[i].esp_ip && String(data[i].esp_ip).toLowerCase() === String(espIp).toLowerCase())) {
+                    index = i;
+                    break;
                 }
             }
-            if (index < 0 || index >= data.length) {
+        } else if (isEditingItem || isCopyingItem) {
+            index = findIndexByIP(editingItemIP);
+        } else {
+            const activeEsp = getActiveEspTab();
+            if (activeEsp) {
+                index = findIndexByIP(activeEsp);
+            } else {
                 index = 0;
             }
-            selectEspDropdown.selectedIndex = index;
-
-            const selectedOption = selectEspDropdown.options[index];
-            if (selectedOption) {
-                let rows = selectedOption.getAttribute("data-esp-rows");
-                let columns = selectedOption.getAttribute("data-esp-columns");
-                let startX = selectedOption.getAttribute("data-esp-start-x");
-                let startY = selectedOption.getAttribute("data-esp-start-y");
-                let serpentineDirection = selectedOption.getAttribute("data-esp-serpentine");
-                const espIp = selectedOption.getAttribute("data-esp-ip");
-                updateOccupiedCells(espIp);
-                drawGrid("item", rows, columns, startX, startY, serpentineDirection);
-            }
-        } else {
-            // No devices found: Disable dropdown and display message
-            selectEspDropdown.disabled = true;
-            const messageOption = document.createElement("option");
-            messageOption.textContent = "Please add an ESP device first...";
-            messageOption.disabled = true;
-            selectEspDropdown.appendChild(messageOption);
         }
-    }).catch((error) => console.error(error));
+        if (index < 0 || index >= data.length) {
+            index = 0;
+        }
+        selectEspDropdown.selectedIndex = index;
+
+        const selectedOption = selectEspDropdown.options[index];
+        if (selectedOption) {
+            let rows = selectedOption.getAttribute("data-esp-rows");
+            let columns = selectedOption.getAttribute("data-esp-columns");
+            let startX = selectedOption.getAttribute("data-esp-start-x");
+            let startY = selectedOption.getAttribute("data-esp-start-y");
+            let serpentineDirection = selectedOption.getAttribute("data-esp-serpentine");
+            const espIp = selectedOption.getAttribute("data-esp-ip");
+            updateOccupiedCells(espIp);
+            drawGrid("item", rows, columns, startX, startY, serpentineDirection);
+        }
+    } else {
+        selectEspDropdown.disabled = true;
+        selectEspDropdown.innerHTML = "";
+        const messageOption = document.createElement("option");
+        messageOption.textContent = "Please add an ESP device first...";
+        messageOption.disabled = true;
+        selectEspDropdown.appendChild(messageOption);
+    }
+}
+
+function populateEspDropdown() {
+    if (fetchedEsps && fetchedEsps.length > 0) {
+        renderEspDropdownOptions(fetchedEsps);
+    }
+    fetch("/api/esp?include_metrics=false")
+        .then((response) => response.json())
+        .then((data) => {
+            if (Array.isArray(data)) {
+                renderEspDropdownOptions(data);
+            }
+        })
+        .catch((error) => console.error(error));
 }
 
 document.getElementById('item-modal').addEventListener('show.bs.modal', function (event) {
@@ -1024,9 +1069,12 @@ document.getElementById('item-modal').addEventListener('show.bs.modal', function
         (triggerBtn.textContent && triggerBtn.textContent.includes('Add Item'))
     );
 
-    if (isExplicitAdd || (!isEditingItem && !isCopyingItem)) {
+    if (!window.isAssignedFromMap && (isExplicitAdd || (!isEditingItem && !isCopyingItem))) {
         clearItemFormFields();
         resetItemFormDirty();
+    }
+    if (!window.isAssignedFromMap) {
+        populateEspDropdown();
     }
 });
 
@@ -1071,11 +1119,25 @@ if (itemModalElement) {
 
 document.getElementById('item-modal').addEventListener('shown.bs.modal', function () {
     let inputField = document.getElementById('item_name');
-    inputField.focus();
-    inputField.select();
-    populateEspDropdown();
+    if (inputField) {
+        inputField.focus();
+        inputField.select();
+    }
     if (!isEditingItem && !isCopyingItem) {
         resetItemFormDirty();
+    }
+    if (selectEspDropdown && selectEspDropdown.selectedIndex >= 0) {
+        const selectedOption = selectEspDropdown.options[selectEspDropdown.selectedIndex];
+        if (selectedOption) {
+            let rows = selectedOption.getAttribute("data-esp-rows");
+            let columns = selectedOption.getAttribute("data-esp-columns");
+            let startX = selectedOption.getAttribute("data-esp-start-x");
+            let startY = selectedOption.getAttribute("data-esp-start-y");
+            let serpentineDirection = selectedOption.getAttribute("data-esp-serpentine");
+            const espIp = selectedOption.getAttribute("data-esp-ip");
+            if (espIp) updateOccupiedCells(espIp);
+            drawGrid("item", rows, columns, startX, startY, serpentineDirection);
+        }
     }
 });
 document.getElementById('item_esp_select').addEventListener('change', function () {
@@ -1086,7 +1148,9 @@ document.getElementById('item_esp_select').addEventListener('change', function (
     let startY = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-start-y");
     let serpentineDirection = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-serpentine");
     const espIp = selectEspDropdown.options[selectEspDropdown.selectedIndex].getAttribute("data-esp-ip");
-    clearAll();
+    if (!window.isAssignedFromMap) {
+        clearAll();
+    }
     updateOccupiedCells(espIp);
     drawGrid("item", rows, columns, startX, startY, serpentineDirection);
 });
@@ -1121,6 +1185,7 @@ function loadItems() {
         .then(([esps, items]) => {
             fetchedEsps = Array.isArray(esps) ? esps : [];
             fetchedItems = Array.isArray(items) ? items : [];
+            window.fetchedItems = fetchedItems;
             generateItemsGrid();
         })
         .catch((error) => {
@@ -1128,6 +1193,7 @@ function loadItems() {
             updateEmptyState(0, 0);
         });
 }
+window.loadItems = loadItems;
 
 // Helper function to get badge styling and text based on quantity and custom min_quantity threshold
 function getStockBadgeConfig(quantity, minQuantity = 3) {
@@ -1758,10 +1824,132 @@ function clearItemFormFields() {
         saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
     }
 
+    window.isAssignedFromMap = false;
+    window.assignedMapTarget = null;
+    const badge = document.getElementById('assigned-from-map-badge');
+    if (badge) badge.remove();
+    const hiddenInput = document.getElementById('assigned-map-esp-ip');
+    if (hiddenInput) hiddenInput.remove();
+    const hiddenLedInput = document.getElementById('assigned-map-led-num');
+    if (hiddenLedInput) hiddenLedInput.remove();
+    if (selectEspDropdown) selectEspDropdown.disabled = false;
+
     removeLocalStorage();
-    clearAll();
+    clearAll(true);
     clickedCells = [];
 }
+
+function openAddModalWithPreFill({ espId, espIp, ledNum }) {
+    clearItemFormFields();
+    resetItemFormDirty();
+
+    window.isAssignedFromMap = true;
+    window.assignedMapTarget = { espId, espIp, ledNum };
+
+    // Set LED position
+    clickedCells = [ledNum];
+    localStorage.setItem('led_positions', JSON.stringify([ledNum]));
+
+    // Update modal labels
+    const modalLabel = document.getElementById("item-modal-label");
+    if (modalLabel) {
+        modalLabel.textContent = (typeof translation !== 'undefined' && translation.add_item) ? translation.add_item : "Add Item";
+    }
+    const saveBtnLabel = document.getElementById("item_add_btn_label");
+    if (saveBtnLabel) {
+        saveBtnLabel.textContent = (typeof translation !== 'undefined' && translation.add_btn_label) ? translation.add_btn_label : "Add";
+    }
+
+    // Add visual badge to controller label
+    const espLabel = document.getElementById('item_esp_select_label');
+    if (espLabel) {
+        let badge = document.getElementById('assigned-from-map-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.id = 'assigned-from-map-badge';
+            badge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle ms-2 align-middle';
+            espLabel.appendChild(badge);
+        }
+        const badgeLabel = (window.t ? window.t('assigned_from_map') : 'Assigned from Map');
+        badge.innerHTML = `<i data-lucide="map-pin" style="width:12px;height:12px;" class="me-1"></i>${escapeHtml(badgeLabel)} (Bin #${ledNum})`;
+        if (window.lucide && lucide.createIcons) {
+            lucide.createIcons({ root: espLabel });
+        }
+    }
+
+    // Add hidden input for standard form submission compliance
+    let hiddenInput = document.getElementById('assigned-map-esp-ip');
+    if (!hiddenInput) {
+        hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.id = 'assigned-map-esp-ip';
+        hiddenInput.name = 'assigned_esp_ip';
+        if (selectEspDropdown && selectEspDropdown.parentElement) {
+            selectEspDropdown.parentElement.appendChild(hiddenInput);
+        }
+    }
+    hiddenInput.value = espIp;
+
+    let hiddenLedInput = document.getElementById('assigned-map-led-num');
+    if (!hiddenLedInput) {
+        hiddenLedInput = document.createElement('input');
+        hiddenLedInput.type = 'hidden';
+        hiddenLedInput.id = 'assigned-map-led-num';
+        hiddenLedInput.name = 'assigned_led_num';
+        if (selectEspDropdown && selectEspDropdown.parentElement) {
+            selectEspDropdown.parentElement.appendChild(hiddenLedInput);
+        }
+    }
+    hiddenLedInput.value = ledNum;
+
+    // Populate dropdown options from ESPs or fetchedEsps
+    const availableEsps = (typeof ESPs !== 'undefined' && ESPs.length > 0)
+        ? ESPs
+        : ((window.ESPs && window.ESPs.length > 0) ? window.ESPs : fetchedEsps);
+    if (availableEsps && availableEsps.length > 0) {
+        fetchedEsps = availableEsps;
+        renderEspDropdownOptions(availableEsps);
+    }
+    if (selectEspDropdown) {
+        selectEspDropdown.disabled = true;
+    }
+
+    // Select the target ESP and lock it
+    let targetIndex = -1;
+    if (selectEspDropdown && selectEspDropdown.options) {
+        for (let i = 0; i < selectEspDropdown.options.length; i++) {
+            const opt = selectEspDropdown.options[i];
+            if (String(opt.value) === String(espId) || (opt.dataset.espIp && String(opt.dataset.espIp).toLowerCase() === String(espIp).toLowerCase())) {
+                targetIndex = i;
+                break;
+            }
+        }
+    }
+    if (targetIndex >= 0 && selectEspDropdown) {
+        selectEspDropdown.selectedIndex = targetIndex;
+        clickedCells = [ledNum];
+        localStorage.setItem('led_positions', JSON.stringify([ledNum]));
+    }
+
+    // Open item modal first so layout dimensions are active
+    DialogManager.open('item-modal');
+
+    requestAnimationFrame(() => {
+        if (targetIndex >= 0 && selectEspDropdown) {
+            const selectedOption = selectEspDropdown.options[targetIndex];
+            if (selectedOption) {
+                let rows = selectedOption.getAttribute("data-esp-rows");
+                let columns = selectedOption.getAttribute("data-esp-columns");
+                let startX = selectedOption.getAttribute("data-esp-start-x");
+                let startY = selectedOption.getAttribute("data-esp-start-y");
+                let serpentineDirection = selectedOption.getAttribute("data-esp-serpentine");
+                updateOccupiedCells(espIp);
+                drawGrid("item", rows, columns, startX, startY, serpentineDirection);
+            }
+        }
+    });
+}
+window.openAddModalWithPreFill = openAddModalWithPreFill;
 
 function resetModal(skipHide = false) {
     clearItemFormFields();

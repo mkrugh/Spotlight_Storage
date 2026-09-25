@@ -156,11 +156,21 @@ def write_item(item):
         except (ValueError, TypeError):
             min_qty = 3
 
+    pos = item.get('position')
+    if isinstance(pos, int):
+        pos = json.dumps([pos])
+    elif isinstance(pos, (list, dict)):
+        pos = json.dumps(pos)
+    elif pos is None or str(pos).strip() in ('', 'None'):
+        pos = '[]'
+    else:
+        pos = str(pos)
+
     with contextlib.closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             'INSERT INTO items (name, link, image, position, quantity, min_quantity, ip, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [item['name'], item.get('link', ''), item.get('image', ''), item.get('position', '[]'),
+            [item['name'], item.get('link', ''), item.get('image', ''), pos,
              item.get('quantity', 0), min_qty, item.get('ip', ''), item.get('tags', '')]
         )
         last_id = cursor.lastrowid
@@ -191,11 +201,21 @@ def update_item(id, data):
         except (ValueError, TypeError):
             min_qty = 3
 
+    pos = data.get('position')
+    if isinstance(pos, int):
+        pos = json.dumps([pos])
+    elif isinstance(pos, (list, dict)):
+        pos = json.dumps(pos)
+    elif pos is None or str(pos).strip() in ('', 'None'):
+        pos = '[]'
+    else:
+        pos = str(pos)
+
     with contextlib.closing(get_db_connection()) as conn:
         try:
             conn.execute(
                 'UPDATE items SET name = ?, link = ?, image = ?, position = ?, quantity = ?, min_quantity = ?, ip = ?, tags = ? WHERE id = ?',
-                [data['name'], data['link'], data['image'], data['position'], data['quantity'], min_qty, data['ip'], data['tags'], id]
+                [data['name'], data['link'], data['image'], pos, data['quantity'], min_qty, data['ip'], data['tags'], id]
             )
             conn.commit()
         except sqlite3.Error:
@@ -254,6 +274,29 @@ def _format_esp_dict(row):
     return d
 
 
+def get_esp_by_ip_excluding_id(ip, exclude_id=None):
+    """Retrieve an ESP controller matching the given IP, optionally excluding a specific ID."""
+    if not ip:
+        return None
+    ip_clean = str(ip).strip().lower()
+    with contextlib.closing(get_db_connection()) as conn:
+        if exclude_id is not None:
+            try:
+                ex_id = int(exclude_id)
+            except (ValueError, TypeError):
+                ex_id = exclude_id
+            row = conn.execute(
+                "SELECT * FROM esp WHERE LOWER(TRIM(esp_ip)) = ? AND id != ?",
+                (ip_clean, ex_id)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM esp WHERE LOWER(TRIM(esp_ip)) = ?",
+                (ip_clean,)
+            ).fetchone()
+        return dict(row) if row else None
+
+
 # Function to write ESP settings to the database
 def write_esp_settings(esp_settings):
     sections = esp_settings.get('sections')
@@ -273,6 +316,13 @@ def write_esp_settings(esp_settings):
     if not all(field in esp_settings for field in required_fields):
         print("Missing required fields in esp_settings")
         return None
+
+    target_ip = str(esp_settings.get('esp_ip') or '').strip()
+    if target_ip:
+        existing = get_esp_by_ip_excluding_id(target_ip)
+        if existing:
+            existing_name = existing.get('name') or 'Existing Controller'
+            raise ValueError(f"A controller with IP '{target_ip}' already exists ('{existing_name}').")
 
     sections_str = json.dumps(sections) if sections else None
 
@@ -315,6 +365,13 @@ def update_esp_settings(id, esp_settings):
         if not esp_settings.get('serpentineDirection'):
             esp_settings['serpentineDirection'] = sections[0].get('serpentine_direction', 'Horizontal')
 
+    target_ip = str(esp_settings.get('esp_ip') or '').strip()
+    if target_ip:
+        existing = get_esp_by_ip_excluding_id(target_ip, exclude_id=id)
+        if existing:
+            existing_name = existing.get('name') or 'Existing Controller'
+            raise ValueError(f"A controller with IP '{target_ip}' already exists ('{existing_name}').")
+
     sections_str = json.dumps(sections) if sections else None
 
     with contextlib.closing(get_db_connection()) as conn:
@@ -338,19 +395,126 @@ def update_esp_settings(id, esp_settings):
             raise
 
 
+def enrich_esp_metrics(esps, conn=None):
+    """
+    Enriches a list of ESP dictionaries with:
+    - total_bins (int): Total drawer/LED capacity
+    - occupied_bins (int): Number of unique LED indices assigned in items table
+    - fill_percentage (float): Percentage of bins occupied (0.0 to 100.0)
+    """
+    if not esps:
+        return esps
+
+    def get_total_bins(esp):
+        sections = esp.get('sections')
+        if isinstance(sections, list) and len(sections) > 0:
+            return sum(
+                int(s.get('rows', 1)) * int(s.get('cols', 1))
+                for s in sections
+                if isinstance(s, dict)
+            )
+        try:
+            r = int(esp.get('rows') or 0)
+            c = int(esp.get('cols') or 0)
+            return r * c
+        except (ValueError, TypeError):
+            return 0
+
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+
+    try:
+        id_to_esp = {}
+        lookup_to_id = {}
+        query_targets = set()
+
+        for esp in esps:
+            esp_id = esp.get('id')
+            id_to_esp[esp_id] = esp
+            if esp.get('esp_ip'):
+                ip_clean = str(esp['esp_ip']).strip().lower()
+                lookup_to_id[ip_clean] = esp_id
+                query_targets.add(ip_clean)
+            if esp_id is not None:
+                id_clean = str(esp_id).strip().lower()
+                lookup_to_id[id_clean] = esp_id
+                query_targets.add(id_clean)
+
+        if not query_targets:
+            items = []
+        else:
+            placeholders = ', '.join(['?'] * len(query_targets))
+            items = conn.execute(
+                f"SELECT ip, position FROM items WHERE LOWER(TRIM(ip)) IN ({placeholders}) AND position IS NOT NULL AND position != '' AND position != '[]'",
+                list(query_targets)
+            ).fetchall()
+
+        occupied_leds = {esp.get('id'): set() for esp in esps}
+
+        for item in items:
+            item_ip = str(item['ip'] or '').strip().lower()
+            target_esp_id = lookup_to_id.get(item_ip)
+            if target_esp_id is None or target_esp_id not in occupied_leds:
+                continue
+
+            pos_val = item['position']
+            parsed = []
+            if isinstance(pos_val, str):
+                try:
+                    parsed = json.loads(pos_val)
+                except Exception:
+                    parsed = []
+            elif isinstance(pos_val, (list, tuple)):
+                parsed = pos_val
+            elif isinstance(pos_val, int):
+                parsed = [pos_val]
+
+            if isinstance(parsed, int):
+                occupied_leds[target_esp_id].add(parsed)
+            elif isinstance(parsed, (list, tuple)):
+                for idx in parsed:
+                    if isinstance(idx, int):
+                        occupied_leds[target_esp_id].add(idx)
+                    elif isinstance(idx, str) and idx.isdigit():
+                        occupied_leds[target_esp_id].add(int(idx))
+
+        for esp in esps:
+            total = get_total_bins(esp)
+            occupied = len(occupied_leds.get(esp.get('id'), set()))
+            esp['total_bins'] = total
+            esp['occupied_bins'] = occupied
+            if total > 0:
+                esp['fill_percentage'] = round((occupied / total) * 100, 1)
+            else:
+                esp['fill_percentage'] = 0.0
+
+        return esps
+    finally:
+        if close_conn and conn:
+            conn.close()
+
+
 # Function to get ESP settings from the database by ID
-def get_esp_settings(id):
+def get_esp_settings(id, include_metrics=True):
     with contextlib.closing(get_db_connection()) as conn:
         esp_settings = conn.execute('SELECT * FROM esp WHERE id = ?', [id]).fetchone()
         if esp_settings:
-            return _format_esp_dict(esp_settings)
+            formatted = _format_esp_dict(esp_settings)
+            if include_metrics and formatted:
+                enrich_esp_metrics([formatted], conn)
+            return formatted
         return None
 
 
-def read_esp():
+def read_esp(include_metrics=True):
     with contextlib.closing(get_db_connection()) as conn:
         esps = conn.execute('SELECT * FROM esp').fetchall()
-        return [_format_esp_dict(esp) for esp in esps]
+        result = [_format_esp_dict(esp) for esp in esps]
+        if include_metrics and result:
+            enrich_esp_metrics(result, conn)
+        return result
 
 
 # Function to delete ESP settings from the database by ID
@@ -364,7 +528,7 @@ def delete_esp_settings(id):
             raise
 
 
-def get_esp_settings_by_id(id):
+def get_esp_settings_by_id(id, include_metrics=True):
     with contextlib.closing(get_db_connection()) as conn:
         try:
             cursor = conn.cursor()
@@ -375,14 +539,17 @@ def get_esp_settings_by_id(id):
                 return None
 
             esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
-            return _format_esp_dict(esp_settings)
+            formatted = _format_esp_dict(esp_settings)
+            if include_metrics and formatted:
+                enrich_esp_metrics([formatted], conn)
+            return formatted
 
         except Exception as e:
             print(f"Database error: {e}")
             return None
 
 
-def get_esp_settings_by_ip(ip):
+def get_esp_settings_by_ip(ip, include_metrics=True):
     with contextlib.closing(get_db_connection()) as conn:
         try:
             cursor = conn.cursor()
@@ -393,7 +560,10 @@ def get_esp_settings_by_ip(ip):
                 return None
 
             esp_settings = {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
-            return _format_esp_dict(esp_settings)
+            formatted = _format_esp_dict(esp_settings)
+            if include_metrics and formatted:
+                enrich_esp_metrics([formatted], conn)
+            return formatted
 
         except Exception as e:
             print(f"Database error: {e}")

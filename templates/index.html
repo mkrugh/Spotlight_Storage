@@ -799,7 +799,19 @@
                 <div class="modal-body">
                     <div id="map-esp-picker" class="d-none mb-3"></div>
                     <div class="d-flex gap-3 map-modal-layout" style="min-height:420px;">
-                        <div id="map-canvas-container" class="position-relative d-flex flex-column justify-content-between" style="flex:1; overflow:auto;">
+                        <div id="map-canvas-container" class="position-relative d-flex flex-column justify-content-between" style="flex:1; overflow:auto; -webkit-overflow-scrolling: touch;">
+                            <!-- Floating Zoom Controls -->
+                            <div class="position-absolute top-0 end-0 m-2 d-flex flex-column gap-1 z-3" style="opacity: 0.8;">
+                                <button type="button" class="btn btn-sm btn-light border shadow-sm" id="map-zoom-in" title="Zoom In" style="width: 32px; height: 32px; padding: 0;">
+                                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light border shadow-sm" id="map-zoom-reset" title="Reset Zoom" style="width: 32px; height: 32px; padding: 0;">
+                                    <i data-lucide="maximize" style="width: 16px; height: 16px;"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light border shadow-sm" id="map-zoom-out" title="Zoom Out" style="width: 32px; height: 32px; padding: 0;">
+                                    <i data-lucide="minus" style="width: 16px; height: 16px;"></i>
+                                </button>
+                            </div>
                             <!-- Alert Banner for Orphaned Parts (hidden by default) -->
                             <div id="map-orphan-banner" class="alert alert-warning d-flex align-items-center justify-content-between p-2 mb-2 small d-none" role="alert">
                                 <div class="d-flex align-items-center gap-2">
@@ -808,6 +820,17 @@
                                 </div>
                                 <button type="button" class="btn btn-warning btn-sm py-0 px-2 fw-semibold text-nowrap" id="map-orphan-view-btn" style="font-size:0.75rem;">
                                     View Issues
+                                </button>
+                            </div>
+                            
+                            <!-- Move / Swap Mode Banner -->
+                            <div id="map-move-banner" class="alert alert-info d-flex align-items-center justify-content-between p-2 mb-2 small d-none" role="alert">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i data-lucide="move" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+                                    <span id="map-move-banner-text"></span>
+                                </div>
+                                <button type="button" class="btn btn-info btn-sm py-0 px-2 fw-semibold text-nowrap" id="map-move-cancel-btn" style="font-size:0.75rem;">
+                                    Cancel
                                 </button>
                             </div>
 

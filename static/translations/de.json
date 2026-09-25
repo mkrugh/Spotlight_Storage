@@ -71,5 +71,22 @@
     "link_btn_label": "Mehr kaufen",
     "tag_match_mode": "Übereinstimmung",
     "tag_match_any": "Beliebig (ODER)",
-    "tag_match_all": "Alle (UND)"
+    "tag_match_all": "Alle (UND)",
+    "cabinet_unconfigured": "Nicht konfiguriert",
+    "cabinet_full": "Voll",
+    "cabinet_overcapacity": "Überbelegt",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} Fächer · {{percent}}% belegt",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} Fächer · 100% belegt · Überbelegt",
+    "cabinet_bins_full": "{{occupied}}/{{total}} Fächer · 100% belegt · Voll",
+    "assign_part_to_bin": "Teil diesem Fach zuweisen",
+    "assigned_from_map": "Aus Plan zugewiesen",
+    "move_part": "Teil verschieben",
+    "cancel_move": "Verschieben abbrechen",
+    "moving_part_banner": "Verschiebe {{part}} (Fach #{{bin}}). Ziel-Fach anklicken oder abbrechen.",
+    "confirm_move_title": "Teil verschieben",
+    "confirm_move_msg": "{{part}} in Fach {{bin}} verschieben?",
+    "confirm_occupied_title": "Fach belegt",
+    "confirm_occupied_msg": "Fach {{bin}} enthält bereits {{target_part}}. Was möchten Sie tun?",
+    "btn_swap_locations": "Plätze tauschen",
+    "btn_colocate": "Dazu legen (Gemeinsam lagern)"
 }

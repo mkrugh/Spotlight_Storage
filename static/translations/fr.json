@@ -71,5 +71,22 @@
     "link_btn_label": "Acheter plus",
     "tag_match_mode": "Mode de correspondance",
     "tag_match_any": "Au moins un (OU)",
-    "tag_match_all": "Tous (ET)"
+    "tag_match_all": "Tous (ET)",
+    "cabinet_unconfigured": "Non configuré",
+    "cabinet_full": "Plein",
+    "cabinet_overcapacity": "Surchargé",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} compartiments · {{percent}}% plein",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} compartiments · 100% plein · Surchargé",
+    "cabinet_bins_full": "{{occupied}}/{{total}} compartiments · 100% plein · Plein",
+    "assign_part_to_bin": "Assigner la pièce à ce compartiment",
+    "assigned_from_map": "Assigné depuis le plan",
+    "move_part": "Déplacer la pièce",
+    "cancel_move": "Annuler le déplacement",
+    "moving_part_banner": "Déplacement de {{part}} (Casier #{{bin}}). Cliquez sur le casier cible ou Annuler.",
+    "confirm_move_title": "Déplacer la pièce",
+    "confirm_move_msg": "Déplacer {{part}} vers le casier {{bin}} ?",
+    "confirm_occupied_title": "Casier occupé",
+    "confirm_occupied_msg": "Le casier {{bin}} contient déjà {{target_part}}. Que souhaitez-vous faire ?",
+    "btn_swap_locations": "Échanger les emplacements",
+    "btn_colocate": "Ajouter à côté (Co-localiser)"
 }

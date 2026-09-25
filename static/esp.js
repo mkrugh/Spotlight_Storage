@@ -388,11 +388,19 @@ document.getElementById("save-esp-button").addEventListener('click', async () =>
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(espItem),
-        }).then((response) => response.json()).then(() => {
+        }).then(async (response) => {
+            const data = await response.json();
+            if (!response.ok) {
+                showAlert('esp-error-alert', data.error || "Failed to save ESP settings.", 'esp');
+                return;
+            }
             populateEspTable();
             if (typeof loadItems === 'function') loadItems();
             DialogManager.close('esp-modal');
-        }).catch((error) => console.error(error));
+        }).catch((error) => {
+            console.error(error);
+            showAlert('esp-error-alert', "An error occurred saving controller settings.", 'esp');
+        });
     };
 
     // Pre-save validation: Check if resizing cabinet will orphan existing parts

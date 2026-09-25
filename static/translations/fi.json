@@ -71,5 +71,22 @@
     "link_btn_label": "Osta lisää",
     "tag_match_mode": "Vastaavuustila",
     "tag_match_any": "Mikä tahansa (TAI)",
-    "tag_match_all": "Kaikki (JA)"
+    "tag_match_all": "Kaikki (JA)",
+    "cabinet_unconfigured": "Ei määritetty",
+    "cabinet_full": "Täysi",
+    "cabinet_overcapacity": "Ylikapasiteetti",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} lokeroa · {{percent}}% täynnä",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} lokeroa · 100% täynnä · Ylikapasiteetti",
+    "cabinet_bins_full": "{{occupied}}/{{total}} lokeroa · 100% täynnä · Täysi",
+    "assign_part_to_bin": "Määritä osa tähän lokeroon",
+    "assigned_from_map": "Määritetty kartalta",
+    "move_part": "Siirrä osa",
+    "cancel_move": "Peruuta siirto",
+    "moving_part_banner": "Siirretään {{part}} (Lokero #{{bin}}). Napsauta kohdelokeroa tai Peruuta.",
+    "confirm_move_title": "Siirrä osa",
+    "confirm_move_msg": "Siirretäänkö {{part}} lokeroon {{bin}}?",
+    "confirm_occupied_title": "Lokero varattu",
+    "confirm_occupied_msg": "Lokero {{bin}} sisältää jo kohteen {{target_part}}. Mitä haluat tehdä?",
+    "btn_swap_locations": "Vaihda paikkoja",
+    "btn_colocate": "Lisää viereen (Yhteissäilytys)"
 }

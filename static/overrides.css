@@ -1375,19 +1375,20 @@ label {
     padding: 6px 8px;
     box-sizing: border-box;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: none !important;
+    transform-origin: top left;
 }
 
 .map-drawer-grid {
     display: grid;
     gap: clamp(4px, 0.8vw, 8px);
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: none !important;
 }
 
 .map-drawer-card {
-    min-height: 80px;
-    min-width: 0 !important;
+    min-height: 48px; /* Mobile optimization: 48x48px tap targets */
+    min-width: 48px !important;
     border-radius: 7px;
     padding: 6px clamp(4px, 0.6vw, 8px);
     display: flex;
@@ -1616,20 +1617,16 @@ dialog.app-dialog.modal:not([open]) {
 
 dialog.app-dialog.modal::backdrop {
     background-color: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
 }
 
-
-
-/* Smooth Entry / Exit Animation for Native Dialogs */
+/* Fast Clean Entry Animation for Native Dialogs (no scale/pop-up artifact) */
 dialog.app-dialog.modal[open]:not(.legacy-dialog-polyfill) {
-    animation: dialog-fade-in 0.2s ease-out;
+    animation: dialog-fade-in 0.1s ease-out;
 }
 
 @keyframes dialog-fade-in {
-    from { opacity: 0; transform: scale(0.96); }
-    to { opacity: 1; transform: scale(1); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 /* Scroll Locking (UX Parity with Bootstrap) */
@@ -1648,12 +1645,12 @@ dialog.legacy-dialog-polyfill {
     overflow-y: auto !important;
     z-index: 10000 !important;
     transform: translate(-50%, -50%) !important;
-    animation: polyfill-fade-in 0.2s ease-out !important;
+    animation: polyfill-fade-in 0.1s ease-out !important;
 }
 
 @keyframes polyfill-fade-in {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    from { opacity: 0; transform: translate(-50%, -50%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 .legacy-dialog-backdrop {
@@ -1663,8 +1660,6 @@ dialog.legacy-dialog-polyfill {
     right: 0 !important;
     bottom: 0 !important;
     background-color: rgba(0, 0, 0, 0.65) !important;
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
     z-index: 9999 !important;
 }
 

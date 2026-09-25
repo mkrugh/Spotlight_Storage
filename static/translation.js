@@ -36,6 +36,39 @@ function setTranslation(id, text, attr = 'textContent') {
     }
 }
 
+window.currentTranslation = {};
+const fallbackTranslations = {
+    "cabinet_unconfigured": "Unconfigured",
+    "cabinet_full": "Full",
+    "cabinet_overcapacity": "Overcapacity",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} bins · {{percent}}% full",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} bins · 100% full · Overcapacity",
+    "cabinet_bins_full": "{{occupied}}/{{total}} bins · 100% full · Full",
+    "assign_part_to_bin": "Assign Part to this Bin",
+    "assigned_from_map": "Assigned from Map",
+    "move_part": "Move Part",
+    "cancel_move": "Cancel Move",
+    "moving_part_banner": "Moving {{part}} (Bin #{{bin}}). Click target bin to place, or Cancel.",
+    "confirm_move_title": "Move Part",
+    "confirm_move_msg": "Move {{part}} to Bin {{bin}}?",
+    "confirm_occupied_title": "Bin Occupied",
+    "confirm_occupied_msg": "Bin {{bin}} currently contains {{target_part}}. What would you like to do?",
+    "btn_swap_locations": "Swap Locations",
+    "btn_colocate": "Add alongside (Co-locate)"
+};
+
+window.t = function(key, params) {
+    let str = (window.currentTranslation && window.currentTranslation[key] !== undefined)
+        ? window.currentTranslation[key]
+        : (fallbackTranslations[key] !== undefined ? fallbackTranslations[key] : key);
+    if (params && typeof params === 'object') {
+        for (const [k, v] of Object.entries(params)) {
+            str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+        }
+    }
+    return str;
+};
+
 // Load the translation file for the selected language
 function loadTranslation(lang) {
     fetch(`/static/translations/${lang}.json`)
@@ -45,6 +78,7 @@ function loadTranslation(lang) {
         })
         .then(translation => {
             if (!translation) return;
+            window.currentTranslation = translation;
 
             setTranslation('add_item', translation.add_item);
             setTranslation('search', translation.search, 'placeholder');

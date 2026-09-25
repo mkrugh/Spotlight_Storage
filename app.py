@@ -213,7 +213,7 @@ def tags():
 
 def get_unique_ips_from_database():
     # Get all items from the database
-    ips = db.read_esp()
+    ips = db.read_esp(include_metrics=False)
     # Create a set to store unique IP addresses
     unique_ips = set()
     # Iterate through the items and extract unique IPs
@@ -360,7 +360,8 @@ def validate_esp_dimensions(data):
 def esps():
     if request.method == 'GET':
         try:
-            esps_data = db.read_esp()  # Fetch ESP data from the database
+            include_metrics = request.args.get('include_metrics', 'true').lower() in ('true', '1')
+            esps_data = db.read_esp(include_metrics=include_metrics)  # Fetch ESP data from the database
             return jsonify(esps_data), 200
         except Exception as e:
             print(f"Error fetching ESP data: {e}")  # Log the error for debugging
@@ -376,9 +377,12 @@ def esps():
             if not is_valid:
                 return jsonify({"error": err}), 400
 
-            id = db.write_esp_settings(esp_data)
-            if id is None:
-                raise ValueError("Failed to write ESP settings")
+            try:
+                id = db.write_esp_settings(esp_data)
+                if id is None:
+                    raise ValueError("Failed to write ESP settings")
+            except ValueError as ve:
+                return jsonify({"error": str(ve)}), 400
 
             esp_data['id'] = id
             return jsonify(esp_data), 201
@@ -528,8 +532,13 @@ def handle_esp(id):
         is_valid, err = validate_esp_dimensions(esp_data)
         if not is_valid:
             return jsonify({'error': err}), 400
-        db.update_esp_settings(id, esp_data)
-        return jsonify({'success': True})
+        try:
+            db.update_esp_settings(id, esp_data)
+            return jsonify({'success': True})
+        except ValueError as ve:
+            return jsonify({'error': str(ve)}), 400
+        except Exception as e:
+            return jsonify({'error': f'Failed to update ESP settings: {e}'}), 500
 
     elif request.method == 'DELETE':
         db.delete_esp_settings(id)

@@ -6,10 +6,14 @@ const buildEditModal = { show: () => DialogManager.open('build-edit-modal'), hid
 const buildExecuteModal = { show: () => DialogManager.open('build-execute-modal'), hide: () => DialogManager.close('build-execute-modal') };
 
 async function openBuildsModal() {
+    buildsListModal.show();
+    const container = document.getElementById('builds-list-container');
+    if (container && (!container.children || container.children.length === 0)) {
+        container.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    }
     try {
         const builds = await apiFetch('/api/builds?include_parts=true');
         renderBuildsList(builds || []);
-        buildsListModal.show();
     } catch (err) {
         console.error('Error opening builds modal:', err);
     }
@@ -62,7 +66,7 @@ function renderBuildsList(builds) {
                         <i data-lucide="hammer" style="width:14px;height:14px;"></i>
                         <span class="ms-1">Execute</span>
                     </button>
-                    <button class="btn btn-outline-primary btn-sm me-1 btn-edit-build" data-build-id="${b.id}">
+                    <button class="btn btn-outline-primary btn-sm me-1 btn-edit-build" data-build-id="${b.id}" data-build-name="${escapeHtml(b.name)}">
                         <i data-lucide="pencil" style="width:14px;height:14px;"></i>
                     </button>
                     <button class="btn btn-outline-danger btn-sm btn-delete-build" data-build-id="${b.id}" data-build-name="${escapeHtml(b.name)}">
@@ -145,45 +149,48 @@ async function openNewBuildModal() {
     buildEditModal.show();
 }
 
-function openEditBuildModal(buildId) {
+function openEditBuildModal(buildId, buildName = null) {
     editingBuildId = buildId;
     document.getElementById('build-edit-modal-label').textContent = 'Edit Build';
-    fetch(`/api/builds/${buildId}`)
-        .then(r => r.json())
-        .then(data => {
-            fetch('/api/items')
-                .then(r => r.json())
-                .then(items => {
-                    document.getElementById('build-name-input').value = '';
-                    document.getElementById('build-parts-list').innerHTML = '';
+    document.getElementById('build-name-input').value = buildName || '';
+    initialBuildName = buildName || '';
+    initialBuildPartsJson = '[]';
+    const partsList = document.getElementById('build-parts-list');
+    partsList.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
 
-                    // Find name from fetched items or use fetchedItems global
-                    const allItems = (typeof fetchedItems !== 'undefined' && fetchedItems.length > 0)
-                        ? fetchedItems : items;
+    buildsListModal.hide();
+    buildEditModal.show();
 
-                    initialBuildName = '';
-                    // Fetch build name from builds list
-                    fetch('/api/builds')
-                        .then(r => r.json())
-                        .then(builds => {
-                            const build = builds.find(b => b.id == buildId);
-                            if (build) {
-                                document.getElementById('build-name-input').value = build.name;
-                                initialBuildName = build.name;
-                            }
-                        });
+    const itemsPromise = (typeof fetchedItems !== 'undefined' && fetchedItems.length > 0)
+        ? Promise.resolve(fetchedItems)
+        : fetch('/api/items').then(r => r.ok ? r.json() : []).catch(() => []);
 
-                    data.items.forEach(part => {
-                        addPartRow(allItems, part.item_id, part.quantity_needed);
-                    });
+    const buildPromise = fetch(`/api/builds/${buildId}`).then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] }));
 
-                    // Snapshot the initial state
-                    initialBuildPartsJson = JSON.stringify(getCurrentBuildPartsData());
+    Promise.all([buildPromise, itemsPromise]).then(([buildData, items]) => {
+        if (editingBuildId !== buildId) return;
 
-                    buildsListModal.hide();
-                    buildEditModal.show();
-                });
+        if ((!buildName || buildName.trim() === '') && buildData && buildData.name) {
+            const nameInput = document.getElementById('build-name-input');
+            if (nameInput) nameInput.value = buildData.name;
+            initialBuildName = buildData.name;
+        }
+
+        const allItems = (typeof fetchedItems !== 'undefined' && fetchedItems.length > 0)
+            ? fetchedItems : items;
+
+        partsList.innerHTML = '';
+        const itemsList = buildData.items || [];
+        itemsList.forEach(part => {
+            addPartRow(allItems, part.item_id, part.quantity_needed);
         });
+
+        // Snapshot the initial state
+        initialBuildPartsJson = JSON.stringify(getCurrentBuildPartsData());
+    }).catch(err => {
+        console.error('Error fetching build details:', err);
+        partsList.innerHTML = '<div class="text-center py-3 text-danger small">Failed to load build parts.</div>';
+    });
 }
 
 function getItemTagsArray(item) {
@@ -603,7 +610,7 @@ document.getElementById('builds-list-container').addEventListener('click', funct
     const editBtn = e.target.closest('.btn-edit-build');
     const delBtn = e.target.closest('.btn-delete-build');
     if (execBtn) openExecuteModal(execBtn.dataset.buildId, execBtn.dataset.buildName);
-    if (editBtn) openEditBuildModal(editBtn.dataset.buildId);
+    if (editBtn) openEditBuildModal(editBtn.dataset.buildId, editBtn.dataset.buildName);
     if (delBtn) deleteBuild(delBtn.dataset.buildId, delBtn.dataset.buildName);
 });
 

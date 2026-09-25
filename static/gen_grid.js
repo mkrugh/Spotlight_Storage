@@ -735,7 +735,10 @@ function TestLights() {
 }
 
 
-function clearAll() {
+function clearAll(force = false) {
+    if (window.isAssignedFromMap && !force) {
+        return;
+    }
     clickedCells.length = 0;
     selectedCells.length = 0;
     // Clear the stored data in the 'led_positions' key
@@ -772,7 +775,7 @@ function submitLights() {
 }
 
 document.getElementById('test_led_button').addEventListener('click',TestLights);
-document.getElementById('clear_led_button').addEventListener('click',clearAll);
+document.getElementById('clear_led_button').addEventListener('click', () => clearAll(true));
 
 
 function convertLedNumber(ledNumber, startX, startY, serpentineDirection, rows, columns) {

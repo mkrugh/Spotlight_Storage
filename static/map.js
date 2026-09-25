@@ -2,6 +2,18 @@ let mapModal = null;
 let mapModalVisible = false;
 let currentMapEsp = null;
 let currentSelectedLed = null;
+let currentMapZoom = 1;
+let movingItem = null;
+
+function getGlobalItems() {
+    if (typeof fetchedItems !== 'undefined' && Array.isArray(fetchedItems) && fetchedItems.length > 0) {
+        return fetchedItems;
+    }
+    if (window.fetchedItems && Array.isArray(window.fetchedItems)) {
+        return window.fetchedItems;
+    }
+    return [];
+}
 
 document.addEventListener('DOMContentLoaded', function () {
     const modalEl = document.getElementById('map-modal');
@@ -11,14 +23,37 @@ document.addEventListener('DOMContentLoaded', function () {
         modalEl.addEventListener('hidden.bs.modal', () => {
             mapModalVisible = false;
             currentSelectedLed = null;
+            movingItem = null;
+            document.getElementById('map-move-banner')?.classList.add('d-none');
         });
     }
+
+    const gridView = document.getElementById('map-drawer-grid-view');
+    const updateZoom = () => {
+        if (gridView) gridView.style.zoom = currentMapZoom;
+    };
+
+    document.getElementById('map-zoom-in')?.addEventListener('click', () => {
+        currentMapZoom = Math.min(currentMapZoom + 0.25, 3);
+        updateZoom();
+    });
+
+    document.getElementById('map-zoom-out')?.addEventListener('click', () => {
+        currentMapZoom = Math.max(currentMapZoom - 0.25, 0.5);
+        updateZoom();
+    });
+
+    document.getElementById('map-zoom-reset')?.addEventListener('click', () => {
+        currentMapZoom = 1;
+        updateZoom();
+    });
 
     // Delegated click handler for controller picker
     document.getElementById('map-esp-picker')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action="select-esp"]');
         if (!btn || !btn.dataset.espId) return;
-        const targetEsp = (window.ESPs || []).find(x => String(x.id) === String(btn.dataset.espId));
+        const espList = (typeof ESPs !== 'undefined' && ESPs.length > 0) ? ESPs : (window.ESPs || []);
+        const targetEsp = espList.find(x => String(x.id) === String(btn.dataset.espId));
         if (targetEsp) showMapForEsp(targetEsp);
     });
 
@@ -30,8 +65,59 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Delegated click handler for orphaned / out-of-bounds side panel
+    // Move banner cancel
+    document.getElementById('map-move-cancel-btn')?.addEventListener('click', () => {
+        movingItem = null;
+        document.getElementById('map-move-banner').classList.add('d-none');
+    });
+
+    // Delegated click handler for orphaned / out-of-bounds side panel & inspector actions
     document.getElementById('map-side-panel')?.addEventListener('click', (e) => {
+        const startMoveBtn = e.target.closest('[data-action="start-move"]');
+        if (startMoveBtn && startMoveBtn.dataset.itemId) {
+            const itemId = startMoveBtn.dataset.itemId;
+            const items = getGlobalItems();
+            let item = items.find(i => String(i.id) === String(itemId));
+
+            const initiateMove = (targetItem) => {
+                if (!targetItem) return;
+                movingItem = {
+                    id: targetItem.id,
+                    name: targetItem.name || 'Part',
+                    oldLedNum: currentSelectedLed,
+                    oldEspIp: currentMapEsp ? currentMapEsp.esp_ip : ''
+                };
+                const bannerText = document.getElementById('map-move-banner-text');
+                if (bannerText) bannerText.textContent = `Select a new bin to move "${targetItem.name}" to.`;
+                const moveBanner = document.getElementById('map-move-banner');
+                if (moveBanner) {
+                    moveBanner.classList.remove('d-none');
+                }
+                if (window.lucide && lucide.createIcons) lucide.createIcons();
+            };
+
+            if (item) {
+                initiateMove(item);
+            } else {
+                fetch(`/api/items/${itemId}`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(fetched => {
+                        if (fetched) initiateMove(fetched);
+                    })
+                    .catch(err => console.error("Error fetching item for move:", err));
+            }
+            return;
+        }
+
+        const assignEmptyBtn = e.target.closest('[data-action="assign-empty-bin"]');
+        if (assignEmptyBtn) {
+            const espIp = assignEmptyBtn.dataset.espIp;
+            const espId = assignEmptyBtn.dataset.espId;
+            const ledNum = parseInt(assignEmptyBtn.dataset.ledNum, 10);
+            assignPartFromMap(espId, espIp, ledNum);
+            return;
+        }
+
         const reassignBtn = e.target.closest('[data-action="reassign-item"]');
         if (reassignBtn && reassignBtn.dataset.itemId) {
             if (window.openAssignPlacement) window.openAssignPlacement(reassignBtn.dataset.itemId);
@@ -57,92 +143,153 @@ function isItemLowStock(item) {
     return qty <= minQty;
 }
 
-async function openMapModal() {
-    // Refresh ESPs if empty
-    if (!ESPs || ESPs.length === 0) {
-        try {
-            const espRes = await fetch('/api/esp');
-            if (espRes.ok) ESPs = await espRes.json();
-        } catch (e) {
-            console.error('Error fetching ESPs for map:', e);
-        }
+function formatCabinetDropdownLabel(e) {
+    const name = e.name || ('Cabinet ' + e.id);
+    const total = (e.total_bins !== undefined && e.total_bins !== null) ? parseInt(e.total_bins, 10) : 0;
+    const occupied = (e.occupied_bins !== undefined && e.occupied_bins !== null) ? parseInt(e.occupied_bins, 10) : 0;
+
+    let metricText = '';
+    if (total <= 0) {
+        metricText = (window.t ? window.t('cabinet_unconfigured') : 'Unconfigured');
+    } else if (occupied > total) {
+        metricText = window.t
+            ? window.t('cabinet_bins_overcapacity', { occupied, total })
+            : `${occupied}/${total} bins · 100% full · Overcapacity`;
+    } else if (occupied === total) {
+        metricText = window.t
+            ? window.t('cabinet_bins_full', { occupied, total })
+            : `${occupied}/${total} bins · 100% full · Full`;
+    } else {
+        const percent = Math.round((occupied / total) * 100);
+        metricText = window.t
+            ? window.t('cabinet_bins_metric', { occupied, total, percent })
+            : `${occupied}/${total} bins · ${percent}% full`;
     }
 
-    if (!ESPs || ESPs.length === 0) {
-        alert('No ESP devices configured.');
-        return;
-    }
+    return `${name} (${metricText})`;
+}
 
-    // Always fetch latest items from the server so the map is guaranteed to be current without page reload
-    try {
-        const itemRes = await fetch('/api/items');
-        if (itemRes.ok) {
-            fetchedItems = await itemRes.json();
-        }
-    } catch (e) {
-        console.error('Error refreshing items for map:', e);
-    }
-
-    // Determine initial ESP based on active WLED tab or filter
-    let esp = null;
-    let activeFilter = null;
-    if (typeof getActiveEspTab === 'function') {
-        activeFilter = getActiveEspTab();
-    } else if (typeof filterESP !== 'undefined' && filterESP.length > 0) {
-        activeFilter = filterESP;
-    }
-
-    if (activeFilter) {
-        const filterTargets = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
-        const cleanTargets = filterTargets
-            .map(t => (t !== undefined && t !== null) ? String(t).trim().toLowerCase() : '')
-            .filter(t => t.length > 0 && t !== 'all boxes');
-
-        if (cleanTargets.length > 0) {
-            esp = ESPs.find(e =>
-                cleanTargets.some(target =>
-                    target === String(e.id).toLowerCase() ||
-                    target === (e.name || '').trim().toLowerCase() ||
-                    target === (e.esp_ip || '').trim().toLowerCase()
-                )
-            );
-        }
-    }
-
-    // If no active ESP filter matched (or "All Boxes" is active), default to the first ESP
-    if (!esp && ESPs.length > 0) {
-        esp = ESPs[0];
-    }
-
-    // Populate the dropdown in modal header
+function populateMapEspDropdown(selectedEsp) {
     const selectEl = document.getElementById('map-esp-select');
     const selectWrapper = document.getElementById('map-esp-select-wrapper');
-    if (selectEl) {
-        selectEl.innerHTML = ESPs.map(e => `
-            <option value="${e.id}">${escapeHtml(e.name || 'Cabinet ' + e.id)} (${escapeHtml(e.esp_ip || '')})</option>
-        `).join('');
+    if (!selectEl) return;
 
-        if (esp) {
-            selectEl.value = esp.id;
-        }
+    selectEl.innerHTML = '';
+    (ESPs || []).forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = formatCabinetDropdownLabel(e);
+        selectEl.appendChild(opt);
+    });
 
-        selectEl.onchange = function () {
-            const selectedId = this.value;
-            const chosen = ESPs.find(e => String(e.id) === String(selectedId));
-            if (chosen) {
-                showMapForEsp(chosen);
-            }
-        };
+    if (selectedEsp) {
+        selectEl.value = selectedEsp.id;
     }
+
+    selectEl.onchange = function () {
+        const selectedId = this.value;
+        const chosen = (ESPs || []).find(e => String(e.id) === String(selectedId));
+        if (chosen) {
+            showMapForEsp(chosen);
+        }
+    };
 
     if (selectWrapper) {
-        selectWrapper.style.display = ESPs.length > 1 ? 'flex' : 'none';
+        selectWrapper.style.display = (ESPs || []).length > 1 ? 'flex' : 'none';
+    }
+}
+
+async function openMapModal() {
+    if ((!ESPs || ESPs.length === 0) && typeof fetchedEsps !== 'undefined' && fetchedEsps.length > 0) {
+        ESPs = fetchedEsps;
     }
 
-    if (esp) {
-        showMapForEsp(esp);
+    const resolveInitialEsp = (espList) => {
+        let esp = null;
+        let activeFilter = null;
+        if (typeof getActiveEspTab === 'function') {
+            activeFilter = getActiveEspTab();
+        } else if (typeof filterESP !== 'undefined' && filterESP.length > 0) {
+            activeFilter = filterESP;
+        }
+
+        if (activeFilter) {
+            const filterTargets = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
+            const cleanTargets = filterTargets
+                .map(t => (t !== undefined && t !== null) ? String(t).trim().toLowerCase() : '')
+                .filter(t => t.length > 0 && t !== 'all boxes');
+
+            if (cleanTargets.length > 0) {
+                esp = espList.find(e =>
+                    cleanTargets.some(target =>
+                        target === String(e.id).toLowerCase() ||
+                        target === (e.name || '').trim().toLowerCase() ||
+                        target === (e.esp_ip || '').trim().toLowerCase()
+                    )
+                );
+            }
+        }
+
+        if (!esp && espList.length > 0) {
+            esp = espList[0];
+        }
+        return esp;
+    };
+
+    // If we have cached controllers, render and open the modal immediately
+    if (ESPs && ESPs.length > 0) {
+        const initialEsp = resolveInitialEsp(ESPs);
+        populateMapEspDropdown(initialEsp);
+        if (initialEsp) {
+            showMapForEsp(initialEsp);
+        } else {
+            showEspPicker();
+        }
     } else {
-        showEspPicker();
+        // If not in memory yet, open modal with loading state immediately
+        if (!mapModalVisible) mapModal.show();
+        const gridView = document.getElementById('map-drawer-grid-view');
+        if (gridView) {
+            gridView.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Loading cabinet map...</div>';
+        }
+    }
+
+    // Refresh ESP metrics and items concurrently in parallel
+    try {
+        const [freshEsps, freshItems] = await Promise.all([
+            fetch('/api/esp?include_metrics=true').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/items').then(r => r.ok ? r.json() : []).catch(() => [])
+        ]);
+
+        if (Array.isArray(freshEsps) && freshEsps.length > 0) {
+            ESPs = freshEsps;
+            window.ESPs = freshEsps;
+        }
+        if (Array.isArray(freshItems) && freshItems.length > 0) {
+            fetchedItems = freshItems;
+        }
+
+        if (!ESPs || ESPs.length === 0) {
+            alert('No ESP devices configured.');
+            if (mapModalVisible) mapModal.hide();
+            return;
+        }
+
+        const activeTargetEsp = currentMapEsp
+            ? (ESPs.find(e => String(e.id) === String(currentMapEsp.id)) || resolveInitialEsp(ESPs))
+            : resolveInitialEsp(ESPs);
+
+        populateMapEspDropdown(activeTargetEsp);
+
+        if (mapModalVisible) {
+            if (activeTargetEsp) {
+                showMapForEsp(activeTargetEsp);
+            } else {
+                showEspPicker();
+            }
+        }
+    } catch (e) {
+        console.error('Error refreshing map data in background:', e);
     }
 }
 
@@ -181,16 +328,11 @@ function showMapForEsp(esp) {
     document.getElementById('map-side-panel')?.classList.remove('d-none');
     resetMapPanel();
 
+    renderMapGrid(esp);
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
+
     if (!mapModalVisible) {
-        document.getElementById('map-modal').addEventListener('shown.bs.modal', function handler() {
-            renderMapGrid(esp);
-            if (window.lucide && lucide.createIcons) lucide.createIcons();
-            document.getElementById('map-modal').removeEventListener('shown.bs.modal', handler);
-        });
         mapModal.show();
-    } else {
-        renderMapGrid(esp);
-        if (window.lucide && lucide.createIcons) lucide.createIcons();
     }
 }
 
@@ -434,6 +576,17 @@ function createDrawerCardHtml(ledNum, items, isSelected) {
 }
 
 function selectDrawer(ledNum) {
+    if (movingItem) {
+        if (ledNum === movingItem.oldLedNum && currentMapEsp && currentMapEsp.esp_ip === movingItem.oldEspIp) {
+            // Cancel move if they click the same bin
+            movingItem = null;
+            document.getElementById('map-move-banner')?.classList.add('d-none');
+        } else {
+            executeMoveOrSwap(movingItem, currentMapEsp, ledNum);
+            return;
+        }
+    }
+
     currentSelectedLed = ledNum;
 
     // Update selection styling on cards
@@ -468,15 +621,27 @@ function renderDrawerInspector(ledNum, items, esp) {
     }
 
     if (!items || items.length === 0) {
+        const btnLabel = (window.t ? window.t('assign_part_to_bin') : 'Assign Part to this Bin');
         container.innerHTML = `
             <div class="map-inspector-card">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                     <span class="fw-bold">Drawer #${ledNum}</span>
                     <span class="badge bg-secondary-subtle text-secondary border">Empty Bin</span>
                 </div>
-                <p class="text-muted small mb-0">This drawer position is currently unassigned and available for storage.</p>
+                <p class="text-muted small mb-3">This drawer position is currently unassigned and available for storage.</p>
+                <button type="button" class="btn btn-primary btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
+                        data-action="assign-empty-bin"
+                        data-esp-ip="${escapeHtml(esp.esp_ip || '')}"
+                        data-esp-id="${escapeHtml(String(esp.id || ''))}"
+                        data-led-num="${ledNum}">
+                    <i data-lucide="plus-circle" style="width:16px;height:16px;"></i>
+                    <span>${escapeHtml(btnLabel)}</span>
+                </button>
             </div>
         `;
+        if (window.lucide && lucide.createIcons) {
+            lucide.createIcons({ root: container });
+        }
         return;
     }
 
@@ -516,6 +681,10 @@ function renderDrawerInspector(ledNum, items, esp) {
                                     ${item.link
                                         ? `<div class="mt-1"><a href="${safeUrl(item.link)}" target="_blank" rel="noopener noreferrer" class="small text-primary text-decoration-none">Supplier link ↗</a></div>`
                                         : ''}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 mt-2 w-100 d-flex align-items-center justify-content-center gap-1"
+                                            data-action="start-move" data-item-id="${item.id}" style="font-size: 0.72rem;">
+                                        <i data-lucide="move" style="width: 14px; height: 14px;"></i> Move Part
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -950,4 +1119,130 @@ document.getElementById('map-modal')?.addEventListener('hidden.bs.modal', functi
     if (highlight) highlight.classList.add('d-none');
     if (tooltip) tooltip.classList.add('d-none');
 });
+async function executeMoveOrSwap(movingParams, targetEsp, targetLedNum) {
+    if (!movingParams || !targetEsp) {
+        movingItem = null;
+        document.getElementById('map-move-banner')?.classList.add('d-none');
+        return;
+    }
+
+    const allItems = getGlobalItems();
+    let itemA = allItems.find(i => String(i.id) === String(movingParams.id));
+    if (!itemA) {
+        try {
+            const res = await fetch(`/api/items/${movingParams.id}`);
+            if (res.ok) itemA = await res.json();
+        } catch (e) {}
+    }
+    if (!itemA) {
+        movingItem = null;
+        document.getElementById('map-move-banner')?.classList.add('d-none');
+        return;
+    }
+
+    // Check if target bin has any existing items
+    const occupancy = buildOccupancyMap(targetEsp);
+    const existingItems = occupancy[targetLedNum] || [];
+
+    const confirmMsg = existingItems.length > 0 
+        ? `Are you sure you want to SWAP "${itemA.name}" with the ${existingItems.length} part(s) in Drawer #${targetLedNum}?`
+        : `Move "${itemA.name}" to Drawer #${targetLedNum}?`;
+        
+    if (!confirm(confirmMsg)) {
+        movingItem = null;
+        document.getElementById('map-move-banner')?.classList.add('d-none');
+        return;
+    }
+
+    try {
+        const promises = [];
+        
+        // Update Item A to new location
+        const itemAPayload = {
+            name: itemA.name || '',
+            link: itemA.link || '',
+            image: itemA.image || '',
+            position: JSON.stringify([targetLedNum]),
+            quantity: parseInt(itemA.quantity, 10) || 0,
+            min_quantity: itemA.min_quantity !== undefined && itemA.min_quantity !== null ? itemA.min_quantity : 3,
+            ip: targetEsp.esp_ip || '',
+            tags: itemA.tags || ''
+        };
+        promises.push(fetch(`/api/items/${itemA.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itemAPayload)
+        }));
+
+        // If target bin had items, move them to Item A's old location (swap)
+        if (existingItems.length > 0) {
+            existingItems.forEach(itemB => {
+                const itemBPayload = {
+                    name: itemB.name || '',
+                    link: itemB.link || '',
+                    image: itemB.image || '',
+                    position: movingParams.oldLedNum !== null && movingParams.oldLedNum !== undefined ? JSON.stringify([movingParams.oldLedNum]) : '[]',
+                    quantity: parseInt(itemB.quantity, 10) || 0,
+                    min_quantity: itemB.min_quantity !== undefined && itemB.min_quantity !== null ? itemB.min_quantity : 3,
+                    ip: movingParams.oldEspIp || '',
+                    tags: itemB.tags || ''
+                };
+                promises.push(fetch(`/api/items/${itemB.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(itemBPayload)
+                }));
+            });
+        }
+
+        const responses = await Promise.all(promises);
+        if (responses.some(r => !r.ok)) throw new Error('Failed to update one or more items.');
+
+        // Hide banner
+        movingItem = null;
+        document.getElementById('map-move-banner')?.classList.add('d-none');
+
+        // Re-fetch items so map occupancy is immediately updated
+        const freshRes = await fetch('/api/items');
+        if (freshRes.ok) {
+            const freshItems = await freshRes.json();
+            fetchedItems = freshItems;
+            window.fetchedItems = freshItems;
+        }
+
+        if (typeof loadItems === 'function') loadItems();
+
+        // Reselect the new drawer
+        showMapForEsp(targetEsp);
+        selectDrawer(targetLedNum);
+
+    } catch (err) {
+        console.error(err);
+        alert('Error moving item: ' + err.message);
+        movingItem = null;
+        document.getElementById('map-move-banner')?.classList.add('d-none');
+    }
+}
+
+
+function assignPartFromMap(espId, espIp, ledNum) {
+    const mapModalEl = document.getElementById('map-modal');
+    const onMapHidden = () => {
+        mapModalEl?.removeEventListener('hidden.bs.modal', onMapHidden);
+        if (window.openAddModalWithPreFill) {
+            window.openAddModalWithPreFill({ espId, espIp, ledNum });
+        }
+    };
+
+    if (mapModalEl && window.DialogManager) {
+        mapModalEl.addEventListener('hidden.bs.modal', onMapHidden, { once: true });
+        DialogManager.close('map-modal');
+    } else {
+        if (window.openAddModalWithPreFill) {
+            window.openAddModalWithPreFill({ espId, espIp, ledNum });
+        }
+    }
+}
+window.assignPartFromMap = assignPartFromMap;
+
 

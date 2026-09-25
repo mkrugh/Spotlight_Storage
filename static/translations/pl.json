@@ -71,5 +71,22 @@
     "link_btn_label": "Kup więcej",
     "tag_match_mode": "Tryb dopasowania",
     "tag_match_any": "Dowolny (LUB)",
-    "tag_match_all": "Wszystkie (I)"
+    "tag_match_all": "Wszystkie (I)",
+    "cabinet_unconfigured": "Nieskonfigurowany",
+    "cabinet_full": "Pełny",
+    "cabinet_overcapacity": "Przepełniony",
+    "cabinet_bins_metric": "{{occupied}}/{{total}} przegródek · {{percent}}% zapełnienia",
+    "cabinet_bins_overcapacity": "{{occupied}}/{{total}} przegródek · 100% zapełnienia · Przepełniony",
+    "cabinet_bins_full": "{{occupied}}/{{total}} przegródek · 100% zapełnienia · Pełny",
+    "assign_part_to_bin": "Przypisz część do tej przegródki",
+    "assigned_from_map": "Przypisano z mapy",
+    "move_part": "Przenieś część",
+    "cancel_move": "Anuluj przenoszenie",
+    "moving_part_banner": "Przenoszenie {{part}} (Przegródka #{{bin}}). Kliknij docelową przegródkę lub Anuluj.",
+    "confirm_move_title": "Przenieś część",
+    "confirm_move_msg": "Przenieść {{part}} do przegródki {{bin}}?",
+    "confirm_occupied_title": "Przegródka zajęta",
+    "confirm_occupied_msg": "Przegródka {{bin}} zawiera już {{target_part}}. Co chcesz zrobić?",
+    "btn_swap_locations": "Zamień miejscami",
+    "btn_colocate": "Dodaj obok (Współdzielenie)"
 }
